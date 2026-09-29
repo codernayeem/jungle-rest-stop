@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  * Academic Project: Interactive 3D Vending Machine
- * Course: Computer Graphics / Image Processing Lab
+ * Course: Image & Computer Graphics Lab
  * Student Name: Md. Nayeem
  * Roll Number:  2107050
  * ============================================================================
@@ -116,7 +116,8 @@ enum DispenseState {
     STATE_IDLE_ON_SHELF,
     STATE_SPIRAL_TURNING,
     STATE_FALLING_CHUTE,
-    STATE_RESTING_IN_TRAY
+    STATE_RESTING_IN_TRAY,
+    STATE_DISPENSED_GONE
 };
 
 struct ProductSlot {
@@ -648,13 +649,22 @@ void selectAndVendItem(int slotIndex) {
     if (slotIndex < 0 || slotIndex >= (int)g_slots.size()) return;
     ProductSlot& s = g_slots[slotIndex];
 
-    if (s.state == STATE_SPIRAL_TURNING || s.state == STATE_FALLING_CHUTE) {
-        return; // Busy vending this product
-    }
-
     // Trigger visual button press
     int btnId = (slotIndex == 9) ? 0 : (slotIndex + 1);
     triggerButtonPress(btnId);
+
+    if (s.state == STATE_DISPENSED_GONE) {
+        std::ostringstream ss;
+        ss << "OUT OF STOCK [" << s.code << "] - PRESS [L] TO LOAD ALL";
+        g_statusMessage = ss.str();
+        g_statusTimer = 3.5f;
+        std::cout << "[VENDING] Slot [" << s.code << "] (" << s.name << ") is OUT OF STOCK! Press [L] or [ENTER] to reload all." << std::endl;
+        return;
+    }
+
+    if (s.state == STATE_SPIRAL_TURNING || s.state == STATE_FALLING_CHUTE || s.state == STATE_RESTING_IN_TRAY) {
+        return; // Busy vending this product
+    }
 
     // Reset and start dispensing sequence
     s.state = STATE_SPIRAL_TURNING;
@@ -667,6 +677,31 @@ void selectAndVendItem(int slotIndex) {
     ss << "DISPENSING [" << s.code << "] " << s.name << " ($" << std::fixed << std::setprecision(2) << s.price << ")";
     g_statusMessage = ss.str();
     g_statusTimer = 6.0f;
+}
+
+// -----------------------------------------------------------------------------
+// Restock / Reload All Products Onto Shelves
+// -----------------------------------------------------------------------------
+void restockAllItems() {
+    triggerButtonPress(11); // Animate green ENTER button on keypad
+    for (auto& s : g_slots) {
+        float y = SHELF_Y[s.shelfRow] + 0.08f;
+        float x = SLOT_X[s.shelfCol];
+        float z = SHELF_CENTER_Z;
+        s.currentPos = Vec3(x, y, z);
+        s.currentRot = Vec3(0, 0, 0);
+        s.velocity = Vec3(0, 0, 0);
+        s.state = STATE_IDLE_ON_SHELF;
+        s.spiralAngle = 0.0f;
+        s.forwardProgress = 0.0f;
+        s.trayTimer = 0.0f;
+    }
+    g_doorHoldTimer = 0.0f;
+    g_targetDoorFlapAngle = 0.0f;
+    g_trayIndicatorLight.enabled = false;
+    g_statusMessage = "RESTOCKED - ALL 10 ITEMS LOADED";
+    g_statusTimer = 3.5f;
+    std::cout << "[RESTOCK] All 10 items reloaded onto shelves! Ready to vend." << std::endl;
 }
 
 // -----------------------------------------------------------------------------
@@ -751,14 +786,10 @@ void updateSimulation(float dt) {
             anyItemInTray = true;
             s.trayTimer -= dt;
             if (s.trayTimer <= 0.0f) {
-                // Reset item back to shelf for continuous demo
-                s.state = STATE_IDLE_ON_SHELF;
-                float y = SHELF_Y[s.shelfRow] + 0.08f;
-                float x = SLOT_X[s.shelfCol];
-                float z = SHELF_CENTER_Z;
-                s.currentPos = Vec3(x, y, z);
-                s.currentRot = Vec3(0, 0, 0);
-                s.forwardProgress = 0.0f;
+                // Item collected by customer - disappears forever until reloaded!
+                s.state = STATE_DISPENSED_GONE;
+                g_statusMessage = "COLLECTED [" + s.code + "] " + s.name + " - ENJOY!";
+                g_statusTimer = 3.0f;
             }
         }
     }
@@ -1056,6 +1087,9 @@ void renderScene() {
     // 6. STOCKED PRODUCTS (Simulated & Animated)
     // -------------------------------------------------------------------------
     for (const auto& s : g_slots) {
+        if (s.state == STATE_DISPENSED_GONE) {
+            continue; // Item has been dispensed and collected - disappeared forever until restocked!
+        }
         switch (s.type) {
             case PROD_CAN_COLA:
             case PROD_CAN_LIME:
@@ -1319,15 +1353,41 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         else if (key == GLFW_KEY_0) {
             selectAndVendItem(9);
         }
-        // SPACE: Vend random item
+        // SPACE: Vend random available item
         else if (key == GLFW_KEY_SPACE) {
             static int randIdx = 0;
-            selectAndVendItem(randIdx);
-            randIdx = (randIdx + 1) % (int)g_slots.size();
+            int startIdx = randIdx;
+            bool found = false;
+            for (int i = 0; i < (int)g_slots.size(); ++i) {
+                int checkIdx = (startIdx + i) % (int)g_slots.size();
+                if (g_slots[checkIdx].state == STATE_IDLE_ON_SHELF) {
+                    randIdx = (checkIdx + 1) % (int)g_slots.size();
+                    selectAndVendItem(checkIdx);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                g_statusMessage = "ALL SOLD OUT - PRESS [L] TO LOAD ALL";
+                g_statusTimer = 3.5f;
+                std::cout << "[VENDING] All items sold out! Press [L] or [ENTER] to reload all." << std::endl;
+            }
         }
-        // [O]: Toggle Collection Door Push / Open
+        // [L] or [ENTER]: Load / Restock all items back onto shelves
+        else if (key == GLFW_KEY_L || key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) {
+            restockAllItems();
+        }
+        // [O]: Toggle Collection Door Push / Open & collect resting item
         else if (key == GLFW_KEY_O) {
             g_isDoorManuallyOpened = !g_isDoorManuallyOpened;
+            for (auto& s : g_slots) {
+                if (s.state == STATE_RESTING_IN_TRAY) {
+                    s.state = STATE_DISPENSED_GONE;
+                    g_statusMessage = "COLLECTED [" + s.code + "] " + s.name + " - ENJOY!";
+                    g_statusTimer = 3.0f;
+                    std::cout << "[TAKE] Collected [" << s.code << "] " << s.name << " from delivery tray!" << std::endl;
+                }
+            }
             std::cout << "[DOOR] Collection Door " << (g_isDoorManuallyOpened ? "OPENED" : "CLOSED") << std::endl;
         }
         // [D] or [F1]: Toggle Directional Light (Room Sunlight)
@@ -1425,7 +1485,8 @@ int main() {
     std::cout << "CONTROLS & INTERACTION:\n";
     std::cout << "  [1] - [9] / [0] : Select Product & Trigger Dispensing Spiral\n";
     std::cout << "  [SPACE]         : Vend Random Item\n";
-    std::cout << "  [O]             : Toggle Open / Close Collection Door\n";
+    std::cout << "  [L] / [ENTER]   : Load / Restock All Products Onto Shelves\n";
+    std::cout << "  [O]             : Toggle Open / Close Collection Door (Collect Item)\n";
     std::cout << "  [D] / [F1]      : Toggle Light Type 1 (Directional Room Sunlight)\n";
     std::cout << "  [P] / [F2]      : Toggle Light Type 2 (Point Cabinet Tube Lamp)\n";
     std::cout << "  [S] / [F3]      : Toggle Light Type 3 (Ceiling Track Spot Light)\n";
