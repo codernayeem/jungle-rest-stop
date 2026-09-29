@@ -158,13 +158,13 @@ inline Mesh createCylinderMesh(int segments = 32) {
         GLuint tr = (i + 1) * 2;
         GLuint br = (i + 1) * 2 + 1;
 
-        indices.push_back(tl);
-        indices.push_back(bl);
-        indices.push_back(tr);
-
-        indices.push_back(tr);
         indices.push_back(bl);
         indices.push_back(br);
+        indices.push_back(tr);
+
+        indices.push_back(bl);
+        indices.push_back(tr);
+        indices.push_back(tl);
     }
 
     // Top Cap

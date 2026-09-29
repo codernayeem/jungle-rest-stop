@@ -18,7 +18,8 @@
  *     - Plus collection bay indicator light!
  *  3. Dynamic Dispensing Mechanism & Physics:
  *     - Rotating product spiral moves selected item forward along the shelf.
- *     - Gravity drop, tumbling rotation, and damped bounce into collection chute.
+ *     - Tipping animation over shelf rail, gravity drop down the internal chute,
+ *       and damped bouncing into collection delivery bay.
  *  4. Opening Collection Door:
  *     - Hierarchical rotation around top hinge axis with "PUSH" plate.
  *  5. Interactive Buttons & Dynamic Indicators:
@@ -26,6 +27,8 @@
  *     - Dynamic LED status screen and multi-state machine indicator lights.
  *  6. Interactive Camera System:
  *     - Mouse orbit, pan, zoom, auto-turntable, and 5 preset views.
+ *  7. Framerate Management:
+ *     - Max FPS capped at 100 for smooth, consistent physics and simulation.
  * ============================================================================
  */
 
@@ -44,12 +47,16 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
+#include <chrono>
+#include <thread>
 
 // -----------------------------------------------------------------------------
 // Window & System Constants
 // -----------------------------------------------------------------------------
 const int WINDOW_WIDTH = 1280;
 const int WINDOW_HEIGHT = 720;
+const double TARGET_FPS = 100.0;
+const double TARGET_FRAME_TIME = 1.0 / TARGET_FPS; // 10ms per frame
 
 // Global Camera Instance
 Camera g_camera;
@@ -68,9 +75,11 @@ SpotLight        g_ceilingSpotLight;
 TrayLight        g_trayIndicatorLight;
 
 // -----------------------------------------------------------------------------
-// Interactive Collection Door State
+// Interactive Collection Door State (Smooth opening & closing animation)
 // -----------------------------------------------------------------------------
-float g_doorFlapAngle = 0.0f; // in degrees (0 = closed, 40 = pushed open)
+float g_doorFlapAngle = 0.0f;       // Current door flap angle in degrees (0 = closed)
+float g_targetDoorFlapAngle = 0.0f; // Target angle for smooth transition
+float g_doorHoldTimer = 0.0f;       // Timer to hold door open after item lands
 bool  g_isDoorManuallyOpened = false;
 
 // -----------------------------------------------------------------------------
@@ -98,8 +107,8 @@ enum ProductType {
     PROD_CHIPS_BBQ,
     PROD_CHIPS_CREAM,
     PROD_CHIPS_NACHO,
-    PROD_CANDY_BAR,
     PROD_CHOCOLATE,
+    PROD_CANDY_BAR,
     PROD_COOKIES
 };
 
@@ -140,6 +149,12 @@ float g_statusTimer = 0.0f;
 const float SHELF_Y[4] = { 1.70f, 1.40f, 1.10f, 0.80f };
 // Slot X coordinates (3 columns per shelf)
 const float SLOT_X[3]  = { -0.36f, -0.18f, 0.00f };
+
+// Shelf geometry constants: Shelves pushed back to leave generous internal drop space
+const float SHELF_CENTER_Z = -0.05f;
+const float SHELF_DEPTH_Z  = 0.38f;
+const float SHELF_FRONT_Z  = 0.14f; // Shelf front lip (behind glass at 0.33f)
+const float CHUTE_DROP_Z   = 0.20f; // Center of vertical drop chute
 
 // -----------------------------------------------------------------------------
 // GLSL Shaders (Support 3 Types of Lighting: Directional, Point, Spot)
@@ -394,11 +409,23 @@ void drawCoil(const Vec3& pos, const Vec3& scaleVec, const Material& mat, float 
 }
 
 // -----------------------------------------------------------------------------
-// Composite Products Constructed from Basic Shapes (Hierarchical Modeling)
+// Composite Products Constructed from Basic Shapes (True Hierarchical Modeling)
 // -----------------------------------------------------------------------------
+
+// Helper to construct root model transformation for a product
+inline Mat4 makeProductRoot(const Vec3& pos, const Vec3& rot) {
+    Mat4 root = Mat4::Identity();
+    root = translate(root, pos);
+    if (rot.y != 0.0f) root = rotate(root, toRadians(rot.y), Vec3(0.0f, 1.0f, 0.0f));
+    if (rot.x != 0.0f) root = rotate(root, toRadians(rot.x), Vec3(1.0f, 0.0f, 0.0f));
+    if (rot.z != 0.0f) root = rotate(root, toRadians(rot.z), Vec3(0.0f, 0.0f, 1.0f));
+    return root;
+}
 
 // 1. Soda Can (Cola, Lime, Energy, Orange)
 void drawSodaCan(const Vec3& pos, const Vec3& rot, const Vec3& mainCol, const Vec3& accentCol) {
+    Mat4 root = makeProductRoot(pos, rot);
+
     Material bodyMat;
     bodyMat.color = mainCol;
     bodyMat.shininess = 64.0f;
@@ -415,19 +442,33 @@ void drawSodaCan(const Vec3& pos, const Vec3& rot, const Vec3& mainCol, const Ve
     logoMat.specularStrength = 0.6f;
 
     // Main cylindrical body
-    drawCylinder(pos, Vec3(0.065f, 0.125f, 0.065f), bodyMat, rot);
+    Mat4 bodyM = scale(root, Vec3(0.065f, 0.125f, 0.065f));
+    drawShape(g_meshCylinder, bodyM, bodyMat);
+
     // Silver top rim
-    drawCylinder(pos + Vec3(0, 0.063f, 0), Vec3(0.064f, 0.008f, 0.064f), metalMat, rot);
+    Mat4 topRimM = translate(root, Vec3(0.0f, 0.063f, 0.0f));
+    topRimM = scale(topRimM, Vec3(0.064f, 0.008f, 0.064f));
+    drawShape(g_meshCylinder, topRimM, metalMat);
+
     // Silver bottom rim
-    drawCylinder(pos - Vec3(0, 0.063f, 0), Vec3(0.062f, 0.008f, 0.062f), metalMat, rot);
+    Mat4 botRimM = translate(root, Vec3(0.0f, -0.063f, 0.0f));
+    botRimM = scale(botRimM, Vec3(0.062f, 0.008f, 0.062f));
+    drawShape(g_meshCylinder, botRimM, metalMat);
+
     // Logo banner band
-    drawCylinder(pos, Vec3(0.0655f, 0.038f, 0.0655f), logoMat, rot);
+    Mat4 logoM = scale(root, Vec3(0.0655f, 0.038f, 0.0655f));
+    drawShape(g_meshCylinder, logoM, logoMat);
+
     // Pull-tab on top
-    drawCube(pos + Vec3(0.01f, 0.068f, 0.0f), Vec3(0.02f, 0.003f, 0.012f), metalMat, rot);
+    Mat4 tabM = translate(root, Vec3(0.01f, 0.068f, 0.0f));
+    tabM = scale(tabM, Vec3(0.02f, 0.003f, 0.012f));
+    drawShape(g_meshCube, tabM, metalMat);
 }
 
 // 2. Beverage Bottle (Water, Juice)
 void drawBottle(const Vec3& pos, const Vec3& rot, const Vec3& liquidCol, const Vec3& capCol) {
+    Mat4 root = makeProductRoot(pos, rot);
+
     Material plasticMat;
     plasticMat.color = liquidCol;
     plasticMat.shininess = 96.0f;
@@ -442,17 +483,30 @@ void drawBottle(const Vec3& pos, const Vec3& rot, const Vec3& liquidCol, const V
     labelMat.shininess = 16.0f;
 
     // Lower bottle body
-    drawCylinder(pos - Vec3(0, 0.015f, 0), Vec3(0.065f, 0.10f, 0.065f), plasticMat, rot);
+    Mat4 bodyM = translate(root, Vec3(0.0f, -0.015f, 0.0f));
+    bodyM = scale(bodyM, Vec3(0.065f, 0.10f, 0.065f));
+    drawShape(g_meshCylinder, bodyM, plasticMat);
+
     // Bottle neck
-    drawCylinder(pos + Vec3(0, 0.052f, 0), Vec3(0.032f, 0.045f, 0.032f), plasticMat, rot);
+    Mat4 neckM = translate(root, Vec3(0.0f, 0.052f, 0.0f));
+    neckM = scale(neckM, Vec3(0.032f, 0.045f, 0.032f));
+    drawShape(g_meshCylinder, neckM, plasticMat);
+
     // Cap
-    drawCylinder(pos + Vec3(0, 0.076f, 0), Vec3(0.035f, 0.015f, 0.035f), capMat, rot);
+    Mat4 capM = translate(root, Vec3(0.0f, 0.076f, 0.0f));
+    capM = scale(capM, Vec3(0.035f, 0.015f, 0.035f));
+    drawShape(g_meshCylinder, capM, capMat);
+
     // Label wrap
-    drawCylinder(pos - Vec3(0, 0.015f, 0), Vec3(0.0655f, 0.04f, 0.0655f), labelMat, rot);
+    Mat4 labelM = translate(root, Vec3(0.0f, -0.015f, 0.0f));
+    labelM = scale(labelM, Vec3(0.0655f, 0.04f, 0.0655f));
+    drawShape(g_meshCylinder, labelM, labelMat);
 }
 
 // 3. Snack Pouch / Bag (Chips, Crisps)
 void drawSnackBag(const Vec3& pos, const Vec3& rot, const Vec3& mainCol, const Vec3& secondaryCol) {
+    Mat4 root = makeProductRoot(pos, rot);
+
     Material bagMat;
     bagMat.color = mainCol;
     bagMat.shininess = 64.0f;
@@ -463,17 +517,29 @@ void drawSnackBag(const Vec3& pos, const Vec3& rot, const Vec3& mainCol, const V
     crimpMat.shininess = 32.0f;
 
     // Pouch body
-    drawCube(pos, Vec3(0.095f, 0.13f, 0.045f), bagMat, rot);
+    Mat4 bodyM = scale(root, Vec3(0.095f, 0.13f, 0.045f));
+    drawShape(g_meshCube, bodyM, bagMat);
+
     // Top crimp seal
-    drawCube(pos + Vec3(0, 0.068f, 0), Vec3(0.098f, 0.01f, 0.012f), crimpMat, rot);
+    Mat4 topCrimpM = translate(root, Vec3(0.0f, 0.068f, 0.0f));
+    topCrimpM = scale(topCrimpM, Vec3(0.098f, 0.01f, 0.012f));
+    drawShape(g_meshCube, topCrimpM, crimpMat);
+
     // Bottom crimp seal
-    drawCube(pos - Vec3(0, 0.068f, 0), Vec3(0.098f, 0.01f, 0.012f), crimpMat, rot);
+    Mat4 botCrimpM = translate(root, Vec3(0.0f, -0.068f, 0.0f));
+    botCrimpM = scale(botCrimpM, Vec3(0.098f, 0.01f, 0.012f));
+    drawShape(g_meshCube, botCrimpM, crimpMat);
+
     // Brand emblem on pouch
-    drawCube(pos, Vec3(0.08f, 0.045f, 0.048f), crimpMat, rot);
+    Mat4 emblemM = translate(root, Vec3(0.0f, 0.0f, 0.001f));
+    emblemM = scale(emblemM, Vec3(0.08f, 0.045f, 0.048f));
+    drawShape(g_meshCube, emblemM, crimpMat);
 }
 
 // 4. Candy Bar & Cookies
 void drawCandyBar(const Vec3& pos, const Vec3& rot, const Vec3& wrapperCol, const Vec3& accentCol) {
+    Mat4 root = makeProductRoot(pos, rot);
+
     Material wrapMat;
     wrapMat.color = wrapperCol;
     wrapMat.shininess = 48.0f;
@@ -484,9 +550,12 @@ void drawCandyBar(const Vec3& pos, const Vec3& rot, const Vec3& wrapperCol, cons
     accMat.shininess = 32.0f;
 
     // Main rectangular wrapper
-    drawCube(pos, Vec3(0.105f, 0.038f, 0.055f), wrapMat, rot);
+    Mat4 wrapM = scale(root, Vec3(0.105f, 0.038f, 0.055f));
+    drawShape(g_meshCube, wrapM, wrapMat);
+
     // Central branding band
-    drawCube(pos, Vec3(0.055f, 0.040f, 0.057f), accMat, rot);
+    Mat4 bandM = scale(root, Vec3(0.055f, 0.040f, 0.057f));
+    drawShape(g_meshCube, bandM, accMat);
 }
 
 // -----------------------------------------------------------------------------
@@ -494,7 +563,6 @@ void drawCandyBar(const Vec3& pos, const Vec3& rot, const Vec3& wrapperCol, cons
 // -----------------------------------------------------------------------------
 void initKeypadButtons() {
     g_keypadButtons.clear();
-    // 3 rows of numbers 1-9, plus row 4 (Cancel, 0, Enter)
     for (int r = 0; r < 4; ++r) {
         for (int c = 0; c < 3; ++c) {
             KeypadButton btn;
@@ -560,11 +628,11 @@ void initProductSlots() {
     g_slots.push_back({ "E1","Caramel Wafer",   1.35f, PROD_CANDY_BAR,    Vec3(0.85f, 0.10f, 0.20f), Vec3(0.95f, 0.95f, 0.95f), 3, 1, STATE_IDLE_ON_SHELF, 0.0f, 0.0f, Vec3(), Vec3(), Vec3(), 0.0f });
     g_slots.push_back({ "E2","Cookies Delight", 1.60f, PROD_COOKIES,      Vec3(0.12f, 0.35f, 0.75f), Vec3(0.95f, 0.85f, 0.30f), 3, 2, STATE_IDLE_ON_SHELF, 0.0f, 0.0f, Vec3(), Vec3(), Vec3(), 0.0f });
 
-    // Compute initial shelf coordinates
+    // Initial item positions: resting inside spirals on the shelves
     for (auto& s : g_slots) {
         float y = SHELF_Y[s.shelfRow] + 0.08f;
         float x = SLOT_X[s.shelfCol];
-        float z = 0.04f;
+        float z = SHELF_CENTER_Z;
         s.currentPos = Vec3(x, y, z);
         s.currentRot = Vec3(0, 0, 0);
         s.state = STATE_IDLE_ON_SHELF;
@@ -617,7 +685,7 @@ void updateSimulation(float dt) {
     // Keypad button depression return spring
     for (auto& btn : g_keypadButtons) {
         if (btn.pressOffset > 0.0f) {
-            btn.pressOffset = std::max(0.0f, btn.pressOffset - 0.03f * dt);
+            btn.pressOffset = std::max(0.0f, btn.pressOffset - 0.04f * dt);
         }
     }
 
@@ -627,46 +695,55 @@ void updateSimulation(float dt) {
     // Update dispensing items
     for (auto& s : g_slots) {
         if (s.state == STATE_SPIRAL_TURNING) {
-            // Spiral rotation & forward linear translation
-            float speed = 0.70f; // progress per second
+            // Spiral rotation & forward linear translation along shelf
+            float speed = 0.65f; // progress per second
             s.forwardProgress += speed * dt;
             s.spiralAngle += 360.0f * speed * dt;
 
-            float initZ = 0.04f;
-            float edgeZ = 0.20f;
-            s.currentPos.z = initZ + s.forwardProgress * (edgeZ - initZ);
+            float initZ = SHELF_CENTER_Z;
+            float ledgeZ = SHELF_FRONT_Z;
+            s.currentPos.z = initZ + s.forwardProgress * (ledgeZ - initZ);
+
+            // Progressive tilt forward as it nears the shelf edge
+            if (s.forwardProgress > 0.75f) {
+                float tiltFactor = (s.forwardProgress - 0.75f) / 0.25f;
+                s.currentRot.x = tiltFactor * 30.0f;
+            }
 
             if (s.forwardProgress >= 1.0f) {
-                // Item passes edge of shelf and falls down chute!
+                // Item slides off shelf lip into the internal drop chute!
                 s.state = STATE_FALLING_CHUTE;
-                s.velocity = Vec3(0.0f, 0.0f, 0.45f); // Forward momentum
+                s.velocity = Vec3(0.0f, -0.4f, 0.05f); // Gentle forward nudge into chute
             }
         }
         else if (s.state == STATE_FALLING_CHUTE) {
             // Gravity acceleration
-            s.velocity.y -= 7.8f * dt;
+            s.velocity.y -= 6.0f * dt;
             s.currentPos += s.velocity * dt;
 
-            // Tumbling rotation
-            s.currentRot.x += 190.0f * dt;
-            s.currentRot.z += 95.0f * dt;
+            // Restrict Z position strictly inside the chute behind the front glass pane (Z = 0.33f)
+            s.currentPos.z = std::clamp(s.currentPos.z, SHELF_FRONT_Z, 0.26f);
 
-            // Chute tray floor plane
+            // Tumbling rotation while falling
+            s.currentRot.x += 160.0f * dt;
+            s.currentRot.z += 80.0f * dt;
+
+            // Bottom delivery tray floor level
             float floorY = 0.32f;
-            float trayZ = 0.12f;
 
             if (s.currentPos.y <= floorY) {
                 s.currentPos.y = floorY;
-                s.currentPos.z = trayZ + ((s.shelfCol - 1) * 0.06f);
-                s.velocity.y = -s.velocity.y * 0.26f; // Damped bounce
-                s.velocity.z *= 0.35f;
+                s.currentPos.z = 0.18f + ((s.shelfCol - 1) * 0.04f);
+                s.velocity.y = -s.velocity.y * 0.24f; // Damped bounce
+                s.velocity.z = 0.0f;
 
-                if (std::abs(s.velocity.y) < 0.22f) {
-                    // Settled in delivery bay!
+                if (std::abs(s.velocity.y) < 0.20f) {
+                    // Settled safely in delivery chamber
                     s.state = STATE_RESTING_IN_TRAY;
                     s.trayTimer = 5.0f; // Remains for 5 seconds before reset
-                    s.currentRot = Vec3(18.0f, 25.0f, 0.0f); // Resting angle
-                    g_doorFlapAngle = 38.0f; // Collection door flap swings open!
+                    s.currentRot = Vec3(12.0f, 22.0f, 0.0f); // Natural resting angle
+                    g_targetDoorFlapAngle = 38.0f; // Trigger smooth opening from inside
+                    g_doorHoldTimer = 2.4f;        // Keep open for 2.4 seconds then close smoothly
                 }
             }
         }
@@ -678,7 +755,7 @@ void updateSimulation(float dt) {
                 s.state = STATE_IDLE_ON_SHELF;
                 float y = SHELF_Y[s.shelfRow] + 0.08f;
                 float x = SLOT_X[s.shelfCol];
-                float z = 0.04f;
+                float z = SHELF_CENTER_Z;
                 s.currentPos = Vec3(x, y, z);
                 s.currentRot = Vec3(0, 0, 0);
                 s.forwardProgress = 0.0f;
@@ -689,13 +766,25 @@ void updateSimulation(float dt) {
     // Update collection tray indicator light
     g_trayIndicatorLight.enabled = anyItemInTray;
 
-    // Smooth collection door flap motion
-    if (!g_isDoorManuallyOpened) {
-        if (g_doorFlapAngle > 0.0f) {
-            g_doorFlapAngle = std::max(0.0f, g_doorFlapAngle - 55.0f * dt);
+    // Smooth Collection Door Opening & Closing Physics
+    if (g_isDoorManuallyOpened) {
+        g_targetDoorFlapAngle = 45.0f; // Kept open manually via [O] key
+    } else if (g_doorHoldTimer > 0.0f) {
+        g_doorHoldTimer -= dt;
+        g_targetDoorFlapAngle = 38.0f; // Pushed open by dispensed item
+        if (g_doorHoldTimer <= 0.0f) {
+            g_targetDoorFlapAngle = 0.0f; // Return smoothly to closed position
         }
     } else {
-        g_doorFlapAngle = 45.0f; // Keep held open
+        g_targetDoorFlapAngle = 0.0f;
+    }
+
+    // Smoothly interpolate angle towards target (opens at 55 deg/s, closes at 35 deg/s)
+    float doorSpeed = (g_doorFlapAngle < g_targetDoorFlapAngle) ? 55.0f : 35.0f;
+    if (g_doorFlapAngle < g_targetDoorFlapAngle) {
+        g_doorFlapAngle = std::min(g_targetDoorFlapAngle, g_doorFlapAngle + doorSpeed * dt);
+    } else if (g_doorFlapAngle > g_targetDoorFlapAngle) {
+        g_doorFlapAngle = std::max(g_targetDoorFlapAngle, g_doorFlapAngle - doorSpeed * dt);
     }
 }
 
@@ -736,8 +825,8 @@ void renderScene() {
     coilMat.specularStrength = 0.95f;
 
     Material rubberMat;
-    rubberMat.color = Vec3(0.05f, 0.05f, 0.05f);
-    rubberMat.shininess = 8.0f;
+    rubberMat.color = Vec3(0.06f, 0.06f, 0.06f);
+    rubberMat.shininess = 12.0f;
 
     // -------------------------------------------------------------------------
     // 1. ROOM ENVIRONMENT (Floor, Back Wall, Poster, Ceiling Light Fixture)
@@ -793,7 +882,7 @@ void renderScene() {
     posterMat.emission = Vec3(0.05f, 0.05f, 0.06f);
     drawCube(Vec3(1.50f, 1.90f, -1.28f), Vec3(1.10f, 0.80f, 0.01f), posterMat);
 
-    // Poster Header Bar & Design Lines (Hierarchical composition)
+    // Poster Header Bar & Design Lines
     Material posterBarMat;
     posterBarMat.color = Vec3(0.85f, 0.15f, 0.20f);
     drawCube(Vec3(1.50f, 2.18f, -1.27f), Vec3(1.00f, 0.08f, 0.005f), posterBarMat);
@@ -816,48 +905,56 @@ void renderScene() {
     // -------------------------------------------------------------------------
     // Object A: Modern Stainless Steel Trash & Recycling Can (Left of machine)
     float binX = -1.15f;
-    float binZ = 0.10f;
+    float binZ = 0.15f;
     Material binBodyMat;
     binBodyMat.color = Vec3(0.68f, 0.70f, 0.75f);
     binBodyMat.shininess = 96.0f;
     binBodyMat.specularStrength = 0.8f;
-    drawCylinder(Vec3(binX, 0.38f, binZ), Vec3(0.34f, 0.76f, 0.34f), binBodyMat);
-    // Bin Black Base Ring
-    drawCylinder(Vec3(binX, 0.02f, binZ), Vec3(0.36f, 0.04f, 0.36f), rubberMat);
-    // Bin Chrome Rim
-    drawCylinder(Vec3(binX, 0.76f, binZ), Vec3(0.35f, 0.03f, 0.35f), chromeMat);
+
+    // Solid Black Base Ring (sits firmly on floor)
+    drawCylinder(Vec3(binX, 0.03f, binZ), Vec3(0.36f, 0.06f, 0.36f), rubberMat);
+    // Cylindrical Can Body
+    drawCylinder(Vec3(binX, 0.40f, binZ), Vec3(0.33f, 0.70f, 0.33f), binBodyMat);
+    // Bin Chrome Top Rim
+    drawCylinder(Vec3(binX, 0.75f, binZ), Vec3(0.35f, 0.03f, 0.35f), chromeMat);
     // Bin Lid Top Dome
     Material binLidMat;
     binLidMat.color = Vec3(0.18f, 0.20f, 0.22f);
-    drawCylinder(Vec3(binX, 0.78f, binZ), Vec3(0.33f, 0.02f, 0.33f), binLidMat);
+    drawCylinder(Vec3(binX, 0.77f, binZ), Vec3(0.33f, 0.02f, 0.33f), binLidMat);
     // Push swing flap on trash lid
-    drawCube(Vec3(binX, 0.785f, binZ), Vec3(0.20f, 0.01f, 0.14f), chromeMat, Vec3(-20.0f, 0, 0));
+    drawCube(Vec3(binX, 0.775f, binZ), Vec3(0.20f, 0.01f, 0.14f), chromeMat, Vec3(-20.0f, 0, 0));
 
     // Object B: Potted Indoor Plant (Right of machine)
     float plantX = 1.35f;
     float plantZ = 0.20f;
-    // Ceramic Pot (Tapered using multiple cylinders)
     Material potMat;
     potMat.color = Vec3(0.88f, 0.90f, 0.92f);
     potMat.shininess = 64.0f;
-    drawCylinder(Vec3(plantX, 0.25f, plantZ), Vec3(0.38f, 0.50f, 0.38f), potMat);
-    drawCylinder(Vec3(plantX, 0.50f, plantZ), Vec3(0.41f, 0.04f, 0.41f), potMat);
+    potMat.specularStrength = 0.6f;
+
+    // Solid Ceramic Pot Base Plate (sits firmly on floor)
+    drawCylinder(Vec3(plantX, 0.04f, plantZ), Vec3(0.32f, 0.08f, 0.32f), potMat);
+    // Pot Body
+    drawCylinder(Vec3(plantX, 0.28f, plantZ), Vec3(0.38f, 0.42f, 0.38f), potMat);
+    // Pot Upper Rim
+    drawCylinder(Vec3(plantX, 0.50f, plantZ), Vec3(0.42f, 0.04f, 0.42f), potMat);
     // Pot Dark Soil
     Material soilMat;
     soilMat.color = Vec3(0.16f, 0.12f, 0.09f);
-    drawCylinder(Vec3(plantX, 0.49f, plantZ), Vec3(0.36f, 0.02f, 0.36f), soilMat);
-    // Plant Stem
+    drawCylinder(Vec3(plantX, 0.49f, plantZ), Vec3(0.37f, 0.02f, 0.37f), soilMat);
+    // Plant Main Trunk
     Material stemMat;
     stemMat.color = Vec3(0.22f, 0.48f, 0.18f);
-    drawCylinder(Vec3(plantX, 0.65f, plantZ), Vec3(0.04f, 0.32f, 0.04f), stemMat);
-    // Plant Foliage Clusters (Built with spheres)
+    drawCylinder(Vec3(plantX, 0.68f, plantZ), Vec3(0.045f, 0.38f, 0.045f), stemMat);
+    // Plant Foliage Clusters (Spherical Topiary Leaves)
     Material leafMat;
     leafMat.color = Vec3(0.15f, 0.65f, 0.22f);
     leafMat.shininess = 32.0f;
-    drawSphere(Vec3(plantX, 0.85f, plantZ), Vec3(0.32f, 0.26f, 0.32f), leafMat);
-    drawSphere(Vec3(plantX - 0.10f, 0.92f, plantZ + 0.05f), Vec3(0.24f, 0.20f, 0.24f), leafMat);
-    drawSphere(Vec3(plantX + 0.10f, 0.90f, plantZ - 0.06f), Vec3(0.26f, 0.22f, 0.26f), leafMat);
-    drawSphere(Vec3(plantX, 1.05f, plantZ), Vec3(0.22f, 0.22f, 0.22f), leafMat);
+    drawSphere(Vec3(plantX, 1.05f, plantZ), Vec3(0.28f, 0.28f, 0.28f), leafMat);
+    drawSphere(Vec3(plantX, 0.88f, plantZ + 0.12f), Vec3(0.24f, 0.24f, 0.24f), leafMat);
+    drawSphere(Vec3(plantX, 0.88f, plantZ - 0.12f), Vec3(0.24f, 0.24f, 0.24f), leafMat);
+    drawSphere(Vec3(plantX - 0.12f, 0.88f, plantZ), Vec3(0.24f, 0.24f, 0.24f), leafMat);
+    drawSphere(Vec3(plantX + 0.12f, 0.88f, plantZ), Vec3(0.24f, 0.24f, 0.24f), leafMat);
 
     // Object C: Modern Room Bench / Waiting Table (Far left against wall)
     Material benchWoodMat;
@@ -926,31 +1023,32 @@ void renderScene() {
     Material tubeMat;
     tubeMat.color = Vec3(1.0f, 1.0f, 1.0f);
     tubeMat.emission = g_cabinetPointLight.enabled ? Vec3(2.0f, 2.0f, 2.2f) : Vec3(0.05f, 0.05f, 0.05f);
-    drawCylinder(Vec3(-0.15f, 1.82f, 0.10f), Vec3(0.025f, 0.62f, 0.025f), tubeMat, Vec3(0, 0, 90.0f));
+    drawCylinder(Vec3(-0.15f, 1.82f, 0.05f), Vec3(0.025f, 0.62f, 0.025f), tubeMat, Vec3(0, 0, 90.0f));
 
     // 4 Stock Shelves + Price Label Rails + Rotating Helical Coils
+    // Note: Shelves are positioned at SHELF_CENTER_Z with SHELF_DEPTH_Z, leaving 19cm vertical drop space in front
     for (int row = 0; row < 4; ++row) {
         float y = SHELF_Y[row];
         // Shelf Tray Plane
-        drawCube(Vec3(-0.15f, y, 0.0f), Vec3(0.66f, 0.018f, 0.54f), shelfMat);
+        drawCube(Vec3(-0.15f, y, SHELF_CENTER_Z), Vec3(0.66f, 0.018f, SHELF_DEPTH_Z), shelfMat);
         // Shelf Front Rail (Green Price Tag Strip)
         Material railMat;
         railMat.color = Vec3(0.12f, 0.62f, 0.38f);
-        drawCube(Vec3(-0.15f, y, 0.27f), Vec3(0.66f, 0.024f, 0.015f), railMat);
+        drawCube(Vec3(-0.15f, y, SHELF_FRONT_Z), Vec3(0.66f, 0.024f, 0.015f), railMat);
 
         // Price Tag Stickers for Each Slot
         Material tagMat;
         tagMat.color = Vec3(0.96f, 0.96f, 0.96f);
         tagMat.emission = g_cabinetPointLight.enabled ? Vec3(0.2f, 0.2f, 0.2f) : Vec3(0, 0, 0);
         for (int col = 0; col < 3; ++col) {
-            drawCube(Vec3(SLOT_X[col], y, 0.278f), Vec3(0.06f, 0.018f, 0.002f), tagMat);
+            drawCube(Vec3(SLOT_X[col], y, SHELF_FRONT_Z + 0.008f), Vec3(0.06f, 0.018f, 0.002f), tagMat);
         }
 
         // Helical Wire Spirals (Product Spirals - rotate when dispensing)
         for (int col = 0; col < 3; ++col) {
             int slotIdx = row * 3 + col;
             float angle = g_slots[slotIdx].spiralAngle;
-            drawCoil(Vec3(SLOT_X[col], y + 0.068f, 0.04f), Vec3(1.0f, 1.0f, 1.0f), coilMat, angle);
+            drawCoil(Vec3(SLOT_X[col], y + 0.068f, SHELF_CENTER_Z), Vec3(1.0f, 1.0f, 0.85f), coilMat, angle);
         }
     }
 
@@ -988,7 +1086,7 @@ void renderScene() {
     // Column Backing Frame
     drawCube(Vec3(0.35f, 1.10f, 0.32f), Vec3(0.30f, 1.48f, 0.04f), cabinetAccentMat);
 
-    // Multi-color Machine Status Indicator LEDs (Dynamic indicator lights)
+    // Multi-color Machine Status Indicator LEDs
     bool isAnyVending = false;
     for (const auto& s : g_slots) {
         if (s.state == STATE_SPIRAL_TURNING || s.state == STATE_FALLING_CHUTE) {
@@ -1091,14 +1189,10 @@ void renderScene() {
 
     // Opening Collection Door:
     // Hierarchical transformation rotating around the top hinge axis!
-    float hingeY = 0.58f;
+    // Top hinge remains locked at (hingeY, hingeZ) while the bottom swings inward into the machine!
+    float hingeY = 0.59f;
     float hingeZ = 0.32f;
-    float flapH  = 0.26f;
-    float rad = toRadians(g_doorFlapAngle);
-
-    // Calculate center of flap under hinge rotation
-    float cy = hingeY - (flapH * 0.5f) * std::cos(rad);
-    float cz = hingeZ - (flapH * 0.5f) * std::sin(rad);
+    float flapH  = 0.27f;
 
     Material doorFlapMat;
     doorFlapMat.color = Vec3(0.20f, 0.22f, 0.26f);
@@ -1109,12 +1203,24 @@ void renderScene() {
     pushPlateMat.color = Vec3(0.92f, 0.92f, 0.96f);
     pushPlateMat.shininess = 32.0f;
 
-    // Door Flap Body
-    drawCube(Vec3(-0.15f, cy, cz), Vec3(0.58f, flapH, 0.015f), doorFlapMat, Vec3(-g_doorFlapAngle, 0, 0));
-    // "PUSH" Accent Plate (Attached hierarchically to the moving door)
-    float badgeOffsetZ = 0.009f * std::cos(rad);
-    float badgeOffsetY = 0.009f * std::sin(rad);
-    drawCube(Vec3(-0.15f, cy + badgeOffsetY, cz + badgeOffsetZ), Vec3(0.22f, 0.065f, 0.005f), pushPlateMat, Vec3(-g_doorFlapAngle, 0, 0));
+    // 1. Move to the stationary top hinge
+    Mat4 hingeMat = Mat4::Identity();
+    hingeMat = translate(hingeMat, Vec3(-0.15f, hingeY, hingeZ));
+
+    // 2. Rotate around the top hinge (+X axis).
+    // Rotating by +angle swings the bottom of the flap inward into the machine (-Z direction)
+    // while the top of the flap remains anchored at the hinge!
+    hingeMat = rotate(hingeMat, toRadians(g_doorFlapAngle), Vec3(1.0f, 0.0f, 0.0f));
+
+    // 3. Flap body extends downward by flapH from the hinge
+    Mat4 flapBodyM = translate(hingeMat, Vec3(0.0f, -flapH * 0.5f, 0.0f));
+    flapBodyM = scale(flapBodyM, Vec3(0.58f, flapH, 0.015f));
+    drawShape(g_meshCube, flapBodyM, doorFlapMat);
+
+    // 4. "PUSH" text plate attached rigidly to the front face of the moving flap
+    Mat4 badgeM = translate(hingeMat, Vec3(0.0f, -flapH * 0.5f, 0.009f));
+    badgeM = scale(badgeM, Vec3(0.22f, 0.065f, 0.005f));
+    drawShape(g_meshCube, badgeM, pushPlateMat);
 
     // -------------------------------------------------------------------------
     // 9. FRONT PROTECTIVE GLASS WINDOW (Semi-Transparent Blend Pass)
@@ -1352,6 +1458,8 @@ int main() {
     }
 
     glfwMakeContextCurrent(window);
+    glfwSwapInterval(1); // Enable VSync
+
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetCursorPosCallback(window, cursor_pos_callback);
@@ -1375,8 +1483,8 @@ int main() {
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
     glEnable(GL_MULTISAMPLE);
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
+    // Disable face culling so cylinders, thin flaps, and curved surfaces are completely solid from all angles
+    glDisable(GL_CULL_FACE);
 
     // 4. Build Shaders and Basic Geometric Meshes
     g_shaderProgram = createShaderProgram(vertexShaderSource, fragmentShaderSource);
@@ -1384,7 +1492,7 @@ int main() {
     g_meshCube = createCubeMesh();
     g_meshCylinder = createCylinderMesh(32);
     g_meshSphere = createSphereMesh(20, 24);
-    g_meshCoil = createCoilMesh(5, 24, 0.055f, 0.005f, 0.28f);
+    g_meshCoil = createCoilMesh(5, 24, 0.055f, 0.005f, 0.22f);
     g_meshPlane = createPlaneMesh();
 
     // 5. Initialize Interactive Scene State
@@ -1398,10 +1506,10 @@ int main() {
 
     // 6. Main Application Loop
     while (!glfwWindowShouldClose(window)) {
-        double currentTime = glfwGetTime();
-        float dt = static_cast<float>(currentTime - lastTime);
-        lastTime = currentTime;
-        if (dt > 0.1f) dt = 0.1f; // Prevent leap on window focus lag
+        double frameStartTime = glfwGetTime();
+        float dt = static_cast<float>(frameStartTime - lastTime);
+        lastTime = frameStartTime;
+        if (dt > 0.05f) dt = 0.05f; // Prevent leap on window focus lag
 
         // Physics & Animation
         updateSimulation(dt);
@@ -1443,6 +1551,14 @@ int main() {
         // Swap buffers and poll input
         glfwSwapBuffers(window);
         glfwPollEvents();
+
+        // Cap Maximum Framerate to 100 FPS
+        double frameEndTime = glfwGetTime();
+        double frameDuration = frameEndTime - frameStartTime;
+        if (frameDuration < TARGET_FRAME_TIME) {
+            double sleepSeconds = TARGET_FRAME_TIME - frameDuration;
+            std::this_thread::sleep_for(std::chrono::duration<double>(sleepSeconds));
+        }
     }
 
     // 7. Cleanup Resources
