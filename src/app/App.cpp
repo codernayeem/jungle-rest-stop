@@ -9,9 +9,11 @@
 #include "../game/Inventory.h"
 #include "../game/Messages.h"
 #include "../gfx/Screenshot.h"
+#include "../gfx/Profiler.h"
 #include "../scene/Layout.h"
 #include "../scene/Lights.h"
 #include <chrono>
+#include <cstdlib>
 #include <cstdio>
 #include <iostream>
 #include <thread>
@@ -57,7 +59,7 @@ bool App::init(const AppOptions& opt) {
 
     auto t0 = std::chrono::high_resolution_clock::now();
     if (!m_renderer.init(terrainMeshHeight)) std::cerr << "Renderer shader problems (see above)\n";
-    if (opt.lowQuality) { m_renderer.settings.shadowRes = 1024; m_renderer.settings.shadowRadius = 34.0f; }
+    if (opt.lowQuality) { m_renderer.settings.shadowRes = 1024; m_renderer.settings.shadowRadius = 28.0f; }
     m_text.init();
     buildWorld();
     m_buildSeconds = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - t0).count();
@@ -268,7 +270,7 @@ void App::update(float dt) {
 void App::buildFrameInfo(FrameInfo& f, int w, int h) {
     using namespace Layout;
     float aspect = h > 0 ? (float)w / h : 1.0f;
-    f.proj = perspective(toRadians(m_player.fov), aspect, 0.08f, 400.0f);
+    f.proj = perspective(toRadians(m_player.fov), aspect, 0.1f, 400.0f);
     f.view = m_player.viewMatrix();
     f.camPos = m_player.cameraPos();
     f.time = m_time;
@@ -306,26 +308,32 @@ void App::drawWorldText(const Mat4& vp, const Vec3& cam) {
 }
 
 void App::render(int w, int h, bool hud) {
+    Profiler::get().beginFrame();
     FrameInfo f;
     buildFrameInfo(f, w, h);
-    drawDynamicScene(f.camPos);
+    if (!std::getenv("JRS_NO_DYN")) drawDynamicScene(f.camPos);
+    Profiler::get().mark("cpu_collect_shapes");
 
     LightManager& lm = LightManager::get();
     lm.updateEffective(m_day.lampsOn());
     m_tv.addFrameLight();
     m_visitors.addLights(m_day.night());
     lm.collect(f, f.camPos);
+    Profiler::get().mark("cpu_lights");
 
     m_renderer.beginFrame(f, w, h);
-    drawWorldText(m_renderer.viewProj(), f.camPos);
-    m_renderer.drawTransparent();
+    if (!std::getenv("JRS_NO_TEXT")) drawWorldText(m_renderer.viewProj(), f.camPos);
+    Profiler::get().mark("screen_text");
+    if (!std::getenv("JRS_NO_TRANS")) m_renderer.drawTransparent();
     if (hud && m_hudVisible) {
         HudData d;
         fillHud(d);
         m_hud.draw(m_text, w, h, d);
     }
+    Profiler::get().mark("hud");
     m_renderer.endFrame();
     lm.endFrame();
+    Profiler::get().endFrame();
 }
 
 void App::fillHud(HudData& d) {

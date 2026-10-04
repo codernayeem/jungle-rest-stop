@@ -80,6 +80,31 @@ struct Node {
     void torus(const Vec3& p, const Vec3& s, const Material& m, const Vec3& r = Vec3()) const { part(M_TORUS, p, s, m, r); }
     void quad(const Vec3& p, const Vec3& s, const Material& m, const Vec3& r = Vec3()) const { part(M_QUAD, p, s, m, r); }
 
+    // A thin parallelogram plate with corners a, b, b+d-a, d (e.g. a car window).
+    // The unit cube is mapped by the columns (b-a), (d-a), normal*thick, so the
+    // corners land exactly on the given points (no rounding to a rectangle).
+    void panel(const Vec3& a, const Vec3& b, const Vec3& d, float thick, const Material& m) const {
+        Vec3 X = b - a, Y = d - a, Z = normalize(cross(X, Y)) * thick;
+        sink->add(M_CUBE, M * frame(X, Y, Z, a + (X + Y) * 0.5f), m);
+    }
+
+    // A thin triangular plate with corners p0, p1, p2 (a wedge mapped onto them).
+    // Wedge corners: bottom-back -> p0, bottom-front -> p1, top-back -> p2.
+    void tri(const Vec3& p0, const Vec3& p1, const Vec3& p2, float thick, const Material& m) const {
+        Vec3 Zc = p1 - p0, Yc = p2 - p0, Xc = normalize(cross(Yc, Zc)) * thick;
+        sink->add(M_WEDGE, M * frame(Xc, Yc, Zc, p0 + (Yc + Zc) * 0.5f), m);
+    }
+
+    // matrix whose columns are the three axes and the origin
+    static Mat4 frame(const Vec3& x, const Vec3& y, const Vec3& z, const Vec3& o) {
+        Mat4 L;
+        L.m[0] = x.x; L.m[1] = x.y; L.m[2] = x.z;
+        L.m[4] = y.x; L.m[5] = y.y; L.m[6] = y.z;
+        L.m[8] = z.x; L.m[9] = z.y; L.m[10] = z.z;
+        L.m[12] = o.x; L.m[13] = o.y; L.m[14] = o.z;
+        return L;
+    }
+
     // A shape stretched between two points a and b (its local Y axis is aligned to b-a)
     void beam(MeshId mesh, const Vec3& a, const Vec3& b, float thick, const Material& m) const {
         Vec3 d = b - a;

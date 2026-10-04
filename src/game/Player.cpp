@@ -4,14 +4,7 @@
 #include "../scene/Layout.h"
 
 void Player::init() {
-    look.skin = Vec3(0.72f, 0.52f, 0.38f);
-    look.hair = Vec3(0.05f, 0.04f, 0.03f);
-    look.shirt = Vec3(0.12f, 0.45f, 0.42f);
-    look.pants = Vec3(0.12f, 0.14f, 0.22f);
-    look.shoes = Vec3(0.9f, 0.9f, 0.9f);
-    look.hairStyle = 0;
-    look.glasses = true;
-    look.height = 1.0f;
+    look = Human::look(0);   // the player is the "man" model
 }
 
 const char* Player::modeName() const {

@@ -78,15 +78,16 @@ void buildWall(DrawSink& s, CollisionWorld& col, bool alongX, float c, float a0,
             boxAt(mid, ym, 0.0f, w, h, 0.02f, glassM);                               // glass
             boxAt(mid, o.y0 + 0.03f, 0.0f, w, 0.06f, T + 0.02f, frame);              // bottom frame
             boxAt(mid, o.y1 - 0.03f, 0.0f, w, 0.06f, T + 0.02f, frame);              // top frame
-            boxAt(o.a0 + 0.03f, ym, 0.0f, 0.06f, h, T + 0.02f, frame);               // side frames
-            boxAt(o.a1 - 0.03f, ym, 0.0f, 0.06f, h, T + 0.02f, frame);
-            boxAt(mid, ym, 0.0f, 0.04f, h, 0.06f, frame);                             // mullion
+            boxAt(o.a0 + 0.03f, ym, 0.0f, 0.06f, h - 0.12f, T + 0.02f, frame);       // side frames (between top/bottom)
+            boxAt(o.a1 - 0.03f, ym, 0.0f, 0.06f, h - 0.12f, T + 0.02f, frame);
+            boxAt(mid, ym, 0.0f, 0.04f, h - 0.12f, 0.06f, frame);                     // mullion
             boxAt(mid, o.y0 - 0.02f, 0.0f, w + 0.1f, 0.04f, T + 0.16f, sill);       // sill
         } else {
             // door frame trim
-            boxAt(o.a0 - 0.04f, o.y1 * 0.5f, 0.0f, 0.08f, o.y1, T + 0.06f, frame);
-            boxAt(o.a1 + 0.04f, o.y1 * 0.5f, 0.0f, 0.08f, o.y1, T + 0.06f, frame);
-            boxAt(mid, o.y1 + 0.04f, 0.0f, w + 0.16f, 0.08f, T + 0.06f, frame);
+            // trims overlap the wall end by 2 cm, so none of their faces lies on a wall face
+            boxAt(o.a0 + 0.01f, (o.y1 - 0.04f) * 0.5f, 0.0f, 0.06f, o.y1 - 0.04f, T + 0.05f, frame);
+            boxAt(o.a1 - 0.01f, (o.y1 - 0.04f) * 0.5f, 0.0f, 0.06f, o.y1 - 0.04f, T + 0.05f, frame);
+            boxAt(mid, o.y1 - 0.01f, 0.0f, w + 0.04f, 0.06f, T + 0.05f, frame);
         }
         cur = o.a1;
     }
@@ -115,7 +116,12 @@ void Building::buildStatic(DrawSink& s, CollisionWorld& col) {
           Mat::wood(Vec3(0.62f, 0.44f, 0.28f), 0.6f).fl(MF_NO_SHADOW));
     // exterior plinth (concrete base strip)
     Material plinth = Mat::concrete(Vec3(0.55f, 0.55f, 0.53f), 0.6f);
-    w.box({1.5f, 0.17f, Z_FRONT + T * 0.5f + 0.03f}, {BLD_X1 - BLD_X0 + 0.1f, 0.34f, 0.06f}, plinth);
+    // front plinth in two parts, leaving the entrance open
+    {
+        float l0 = BLD_X0 - 0.05f, l1 = -ENTRANCE_HALF - 0.05f, r0 = ENTRANCE_HALF + 0.05f, r1 = BLD_X1 + 0.05f;
+        w.box({(l0 + l1) * 0.5f, 0.17f, Z_FRONT + T * 0.5f + 0.03f}, {l1 - l0, 0.34f, 0.06f}, plinth);
+        w.box({(r0 + r1) * 0.5f, 0.17f, Z_FRONT + T * 0.5f + 0.03f}, {r1 - r0, 0.34f, 0.06f}, plinth);
+    }
     w.box({1.5f, 0.17f, Z_BACK - T * 0.5f - 0.03f}, {BLD_X1 - BLD_X0 + 0.1f, 0.34f, 0.06f}, plinth);
     w.box({ATM_X0 - T * 0.5f - 0.03f, 0.17f, 0}, {0.06f, 0.34f, Z_FRONT - Z_BACK + 0.3f}, plinth);
     w.box({LIB_X1 + T * 0.5f + 0.03f, 0.17f, 0}, {0.06f, 0.34f, Z_FRONT - Z_BACK + 0.3f}, plinth);
@@ -157,8 +163,8 @@ void Building::buildStatic(DrawSink& s, CollisionWorld& col) {
     w.box({0, 2.68f, Z_FRONT + 0.2f}, {3.8f, 0.16f, 0.2f}, Mat::darkMetal());
     w.box({0, 2.56f, Z_FRONT + 0.31f}, {0.3f, 0.06f, 0.04f}, Mat::black());
     // door mat
-    w.box({0, 0.008f, 4.3f}, {2.2f, 0.016f, 1.0f}, Mat::fabric(Vec3(0.22f, 0.20f, 0.18f), 8.0f).fl(MF_NO_SHADOW));
-    w.box({0, 0.07f, 6.0f}, {2.2f, 0.016f, 1.0f}, Mat::fabric(Vec3(0.30f, 0.26f, 0.2f), 8.0f).tx(TEX_CARPET, 2.0f).fl(MF_NO_SHADOW));
+    w.box({0, 0.01f, 4.3f}, {2.0f, 0.02f, 1.0f}, Mat::fabric(Vec3(0.30f, 0.24f, 0.18f), 8.0f).tx(TEX_CARPET, 2.0f).fl(MF_NO_SHADOW));
+    w.box({0, 0.075f, 6.0f}, {2.0f, 0.02f, 1.0f}, Mat::fabric(Vec3(0.30f, 0.26f, 0.2f), 8.0f).tx(TEX_CARPET, 2.0f).fl(MF_NO_SHADOW));
 
     // sliding door collider (enabled while the doors are closed)
     col.addBox(-ENTRANCE_HALF, Z_FRONT - 0.1f, ENTRANCE_HALF, Z_FRONT + 0.25f, 0.0f, 2.6f, &m_doorClosed);
@@ -333,18 +339,18 @@ void Building::buildRoadAndLot(DrawSink& s, CollisionWorld& col) {
         for (int row = 0; row < 2; ++row) {
             float zc = row == 0 ? SPOT_NORTH_Z : SPOT_SOUTH_Z;
             for (int e = -1; e <= 1; e += 2)
-                w.box({sx + e * 1.5f, 0.018f, zc}, {0.1f, 0.006f, 4.6f}, line);
+                w.box({sx + e * 1.5f, 0.024f, zc}, {0.1f, 0.006f, 4.6f}, line);
             float stopZ = row == 0 ? zc - 2.0f : zc + 2.0f;
             w.box({sx, 0.06f, stopZ}, {1.6f, 0.12f, 0.18f}, Mat::concrete(Vec3(0.85f, 0.85f, 0.8f), 1.0f));
         }
     }
     // zebra crossing at x = 0 + walkway between the rows
-    for (int i = 0; i < 6; ++i) w.box({0, 0.018f, 13.9f + i * 0.84f}, {2.4f, 0.006f, 0.42f}, line);
+    for (int i = 0; i < 6; ++i) w.box({0, 0.024f, 13.9f + i * 0.84f}, {2.4f, 0.006f, 0.42f}, line);
     w.box({0, 0.04f, 11.0f}, {2.6f, 0.06f, 4.8f}, concrete);
     w.box({0, 0.04f, 21.0f}, {2.6f, 0.06f, 4.8f}, concrete);
     // one-way arrows (pointing west, -X)
     for (int i = -1; i <= 1; i += 2) {
-        Node a = w.at({i * 10.0f, 0.018f, AISLE_Z});
+        Node a = w.at({i * 10.0f, 0.024f, AISLE_Z});
         a.box({0.4f, 0, 0}, {1.6f, 0.006f, 0.25f}, line);
         a.box({-0.55f, 0, 0.18f}, {0.6f, 0.006f, 0.2f}, line, {0, -40, 0});
         a.box({-0.55f, 0, -0.18f}, {0.6f, 0.006f, 0.2f}, line, {0, 40, 0});
@@ -358,10 +364,12 @@ void Building::buildRoadAndLot(DrawSink& s, CollisionWorld& col) {
             float dx = x1 - x0, dz = z1 - z0, len = std::sqrt(dx * dx + dz * dz);
             float yaw = toDegrees(std::atan2(-dz, dx));
             Node seg = w.at({(x0 + x1) * 0.5f, 0, (z0 + z1) * 0.5f}, {0, yaw, 0});
-            seg.box({0, 0.0f, 0}, {len + 0.25f, 0.03f, 7.4f}, asphalt);
-            seg.box({0, 0.017f, 3.35f}, {len + 0.25f, 0.006f, 0.14f}, line);
-            seg.box({0, 0.017f, -3.35f}, {len + 0.25f, 0.006f, 0.14f}, line);
-            if (((int)(a / step)) % 2 == 0) seg.box({0, 0.017f, 0}, {len * 0.55f, 0.006f, 0.12f}, yellow);
+            // neighbouring segments overlap a little, so every second one is 6 mm higher
+            float lift = (((int)(a / step)) % 2) * 0.006f;
+            seg.box({0, lift, 0}, {len + 0.25f, 0.03f, 7.4f}, asphalt);
+            seg.box({0, 0.03f, 3.35f}, {len + 0.25f, 0.006f, 0.14f}, line);
+            seg.box({0, 0.03f, -3.35f}, {len + 0.25f, 0.006f, 0.14f}, line);
+            if (((int)(a / step)) % 2 == 0) seg.box({0, 0.03f, 0}, {len * 0.55f, 0.006f, 0.12f}, yellow);
             seg.box({0, -0.005f, 4.4f}, {len + 0.25f, 0.02f, 1.4f}, Material(Vec3(0.40f, 0.33f, 0.24f), 0.02f, 4.0f).tx(TEX_FOREST_FLOOR, 0.4f).fl(MF_NO_SHADOW));
             seg.box({0, -0.005f, -4.4f}, {len + 0.25f, 0.02f, 1.4f}, Material(Vec3(0.40f, 0.33f, 0.24f), 0.02f, 4.0f).tx(TEX_FOREST_FLOOR, 0.4f).fl(MF_NO_SHADOW));
         }
@@ -511,13 +519,13 @@ void Building::drawDynamic(DrawSink& dyn, float time, float hour, bool cutaway, 
     // ---- automatic sliding glass doors ----
     float off = 0.6f + 1.15f * m_doorOpen;
     for (int sx = -1; sx <= 1; sx += 2) {
-        Node d = w.at({sx * off, 0, Z_FRONT + 0.17f});
-        d.box({0, 1.3f, 0}, {1.22f, 2.56f, 0.03f}, Mat::glass(0.25f));
-        d.box({0, 2.56f, 0}, {1.26f, 0.06f, 0.06f}, Mat::darkMetal());
-        d.box({0, 0.03f, 0}, {1.26f, 0.06f, 0.06f}, Mat::darkMetal());
-        d.box({-0.6f, 1.3f, 0}, {0.05f, 2.56f, 0.06f}, Mat::darkMetal());
-        d.box({0.6f, 1.3f, 0}, {0.05f, 2.56f, 0.06f}, Mat::darkMetal());
-        d.box({-sx * 0.5f, 1.05f, 0.04f}, {0.03f, 0.5f, 0.03f}, Mat::chrome());
+        // one door leaf = glass pane + top and bottom rails + an edge post with the handle
+        Node d = w.at({sx * off, 0, Z_FRONT + 0.18f});
+        d.box({0, 1.3f, 0}, {1.2f, 2.44f, 0.02f}, Mat::glass(0.25f));
+        d.box({0, 2.55f, 0}, {1.24f, 0.10f, 0.05f}, Mat::darkMetal());
+        d.box({0, 0.05f, 0}, {1.24f, 0.10f, 0.05f}, Mat::darkMetal());
+        d.box({-sx * 0.6f, 1.3f, 0}, {0.04f, 2.4f, 0.05f}, Mat::darkMetal());
+        d.box({-sx * 0.5f, 1.05f, 0.045f}, {0.03f, 0.5f, 0.03f}, Mat::chrome());
     }
 
     // ---- light fixtures (glow when their group is on) ----

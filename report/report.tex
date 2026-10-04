@@ -173,8 +173,8 @@ Textures & none & 25 procedural textures (texture array, mip-maps) \\
 Shadows / fog / sky & no / no / flat colour & shadow map with PCF / distance fog / sky with clouds, sun, moon, stars \\
 Rooms & vending, ATM, ticket rooms (boxes) & lounge, ATM room, library with windows, doors and real furniture \\
 Machines & keys print a message & full state machines, screens with text, coins, cards, cash, receipts \\
-People & one avatar & articulated humans with walk, sit, drive, press and bend poses + NPC AI \\
-Cars & none & sedan, SUV and hatchback with steering, spinning wheels, doors and lights \\
+People & one avatar & 2 types of articulated humans (man, woman) with walk, sit, drive, press and bend poses + NPC AI \\
+Cars & none & one sedan model in red, blue and white, with steering, spinning wheels, a door and lights \\
 Outside & 31 trees made of spheres & \statJungleTrees\ rainforest trees, \statPalms\ palms, bamboo, banana plants, \statFerns\ ferns, \statGrass\ grass tufts \\
 Time of day & fixed & 24 h cycle, automatic street lamps \\
 Cameras & orbit + first person & first person, third person, free camera + FOV \\
@@ -300,6 +300,98 @@ point of it.
 
 \shot[0.75]{obj_shapes}{The basic shapes rendered by the program (cube, cylinder, sphere, cone, truncated cone, torus, hemisphere, wedge, tapered box, quad, cross card, coil).}
 
+\subsection{The vertices of each shape}\label{sec:vertices}
+This part lists the exact vertices that are stored on the GPU. Every object in the scene is
+only a copy of one of these lists, moved by a matrix (\Cref{sec:worked}).
+
+\paragraph{Flat shapes (corners are written out).} The cube is the most used shape. It has 8
+corners (\Cref{fig:cube}), but every face gets its own 4 vertices so that each face has one flat
+normal. So the cube stores $6\times4=24$ vertices and $6\times2=12$ triangles. Each face
+$(a,b,c,d)$ is split into the triangles $(a,b,c)$ and $(a,c,d)$.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.40\linewidth}
+\centering
+\begin{tikzpicture}[scale=2.1,font=\scriptsize]
+\coordinate (v0) at (0,0); \coordinate (v1) at (1,0); \coordinate (v2) at (1,1); \coordinate (v3) at (0,1);
+\coordinate (v4) at (0.45,-0.35); \coordinate (v5) at (1.45,-0.35); \coordinate (v6) at (1.45,0.65); \coordinate (v7) at (0.45,0.65);
+\draw[dashed,gray] (v0)--(v1) (v0)--(v3) (v0)--(v4);
+\draw[thick] (v1)--(v2)--(v3) (v4)--(v5)--(v6)--(v7)--cycle (v1)--(v5) (v2)--(v6) (v3)--(v7);
+\fill[blue!8,opacity=0.6] (v4)--(v5)--(v6)--(v7)--cycle;
+\foreach \i/\p in {0/left,1/right,2/right,3/left,4/below left,5/below right,6/above right,7/above left} \fill (v\i) circle (0.025) node[\p] {$v_\i$};
+\draw[arr,red] (1.9,-0.2)--(2.3,-0.2) node[right]{$x$};
+\draw[arr,green!50!black] (1.9,-0.2)--(1.9,0.2) node[above]{$y$};
+\draw[arr,blue] (1.9,-0.2)--(1.7,-0.45) node[below]{$z$};
+\end{tikzpicture}
+\end{minipage}\hfill
+\begin{minipage}{0.56\linewidth}
+\centering\small
+\begin{tabular}{@{}cc|cc@{}}
+\toprule
+Corner & $(x,y,z)$ & Corner & $(x,y,z)$ \\ \midrule
+$v_0$ & $(-.5,-.5,-.5)$ & $v_4$ & $(-.5,-.5,\ .5)$ \\
+$v_1$ & $(\ .5,-.5,-.5)$ & $v_5$ & $(\ .5,-.5,\ .5)$ \\
+$v_2$ & $(\ .5,\ .5,-.5)$ & $v_6$ & $(\ .5,\ .5,\ .5)$ \\
+$v_3$ & $(-.5,\ .5,-.5)$ & $v_7$ & $(-.5,\ .5,\ .5)$ \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.5em}
+Faces: front $(v_4v_5v_6v_7)$, back $(v_1v_0v_3v_2)$, top $(v_7v_6v_2v_3)$,
+bottom $(v_0v_1v_5v_4)$, right $(v_5v_1v_2v_6)$, left $(v_0v_4v_7v_3)$.
+\end{minipage}
+\caption{The unit cube: 8 corners, 6 faces. The front face (shaded) looks towards $+z$.}\label{fig:cube}
+\end{figure}
+
+The other flat shapes are built in the same way. Their corners are:
+
+\begin{table}[H]
+\centering\small
+\caption{Corner vertices of the flat shapes}\label{tab:flatverts}
+\begin{tabularx}{\linewidth}{@{}P{2.3cm}Xr@{}}
+\toprule
+Shape & Corner vertices & Vertices / triangles \\ \midrule
+Wedge & left side $w_0(-.5,-.5,.5)$, $w_1(-.5,-.5,-.5)$, $w_2(-.5,.5,-.5)$; right side $w_3,w_4,w_5$ = the same with $x=+.5$. Faces: 2 triangles $(w_0w_2w_1)$, $(w_3w_4w_5)$; bottom, back and sloping quads & 18 / 8 \\
+Tapered box & bottom $b_0(-.5,-.5,.5)$, $b_1(.5,-.5,.5)$, $b_2(.5,-.5,-.5)$, $b_3(-.5,-.5,-.5)$; top $t_0(-.35,.5,.3)$, $t_1(.35,.5,.3)$, $t_2(.35,.5,-.3)$, $t_3(-.35,.5,-.3)$. Side normals: $\mathbf{n}=\text{normalize}((b-a)\times(d-a))$ & 24 / 12 \\
+Quad & $(-.5,-.5,0)$, $(.5,-.5,0)$, $(.5,.5,0)$, $(-.5,.5,0)$, normal $(0,0,1)$ & 4 / 2 \\
+Cross card & quad 1: $(-.5,0,0)$, $(.5,0,0)$, $(.5,1,0)$, $(-.5,1,0)$; quad 2: $(0,0,-.5)$, $(0,0,.5)$, $(0,1,.5)$, $(0,1,-.5)$. The base is at $y=0$, so a scaled card stands on the ground & 8 / 4 \\
+Leaf card & three quads of size $1\times1$ through the centre, one in each plane ($xy$, $yz$, $xz$) & 12 / 6 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Round shapes (vertices come from a formula).} A round shape has too many vertices to
+write by hand, so they come from a loop over an angle. The cylinder, cone and truncated cone use the
+same loop with $n$ steps, $\theta_i = 2\pi i/n$ for $i=0\dots n$, bottom radius $r_b=0.5$ and top radius $r_t$:
+\[
+\mathbf{p}_i^{top} = (r_t\cos\theta_i,\ 0.5,\ r_t\sin\theta_i),\qquad
+\mathbf{p}_i^{bot} = (0.5\cos\theta_i,\ -0.5,\ 0.5\sin\theta_i).
+\]
+Each pair of neighbours makes one side quad $(\mathbf{p}_i^{bot},\mathbf{p}_{i+1}^{bot},\mathbf{p}_{i+1}^{top},\mathbf{p}_i^{top})$.
+A cap is a centre vertex $(0,\pm0.5,0)$ plus the ring, joined as a fan of triangles. For example, the
+first vertices of the 24-sided cylinder are $\mathbf{p}_0^{top}=(0.5,0.5,0)$,
+$\mathbf{p}_1^{top}=(0.483,0.5,0.129)$, $\mathbf{p}_2^{top}=(0.433,0.5,0.25)$ and $\mathbf{p}_6^{top}=(0,0.5,0.5)$.
+
+\begin{table}[H]
+\centering\small
+\caption{Vertex formulas and counts of the round shapes}\label{tab:roundverts}
+\begin{tabularx}{\linewidth}{@{}P{2.6cm}Xr@{}}
+\toprule
+Shape & Vertex formula & Vertices / triangles \\ \midrule
+Cylinder & loop above, $r_t=0.5$, $n=24$, two caps & 102 / 96 \\
+Cylinder (low) & same, $n=8$ & 38 / 32 \\
+Cone & $r_t=0$ (all top vertices meet at the tip $(0,0.5,0)$), $n=20$, bottom cap only & 64 / 60 \\
+Truncated cone & $r_t=0.35$, $n=20$, two caps & 86 / 80 \\
+Sphere & $\mathbf{p}_{ij}=0.5(\sin\phi_i\cos\theta_j,\ \cos\phi_i,\ \sin\phi_i\sin\theta_j)$, $\phi_i=\pi i/14$, $\theta_j=2\pi j/20$ & 315 / 560 \\
+Sphere (low) & same with 5 rings and 8 sectors & 54 / 80 \\
+Hemisphere & same with $\phi\in[0,\pi/2]$ (8 rings) + a flat disc at $y=0$ & 211 / 340 \\
+Torus & $\mathbf{p}_{ij}=(0.4+0.1\cos w_j)(\cos u_i,0,\sin u_i)+(0,0.1\sin w_j,0)$, 28 $\times$ 10 steps & 319 / 560 \\
+Coil & a 6-sided circle around each of 101 points of the helix $\mathbf{c}(t)$ & 606 / 1200 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
 % =============================================================================
 \section{Transformations and Hierarchical Modelling}
 \subsection{The three basic transformations}
@@ -326,6 +418,139 @@ The unit shape is first \textbf{scaled} to the right size, then \textbf{rotated}
 \textbf{moved} to its place inside the parent, and finally the parent's own matrix carries it
 into the world. Normals use the normal matrix $N = (M^{-1})^T$ (upper $3\times3$ part), which keeps
 lighting correct even when a shape is stretched.
+
+% -----------------------------------------------------------------------------
+\subsection{Following vertices into the world}\label{sec:worked}
+The objects fall into four groups. Objects in the same group are built in the same way; only the
+numbers change. For each group, one part is worked out by hand below: its unit vertices
+(\Cref{sec:vertices}) are pushed through $S$, then $R$, then $T$, then the parent matrices.
+
+\begin{table}[H]
+\centering\small
+\caption{The four groups of objects}\label{tab:groups}
+\begin{tabularx}{\linewidth}{@{}P{2.7cm}P{4.2cm}P{2.6cm}X@{}}
+\toprule
+Group & Objects & Main shapes & Transformations used \\ \midrule
+A. Box-built & vending machines, ATM, counters, sofa, bookshelf, tables, walls, doors, TV & cube & $S$ and $T$ only (a few small tilts) \\
+B. Round & wheels, cans, cups, lamps, poles, coffee machine parts, clock & cylinder, cone, sphere, torus & $S$, $T$ and a $90^\circ$ turn to lay the shape on its side \\
+C. Jointed & the man, the woman, the car (door, wheels) & all of them & chains of $T\cdot R$ nodes; only the angles change when they move \\
+D. Plants & trees, palms, bamboo, ferns, grass & low cylinder, wedge, cards & $R_y$ around the trunk, random yaw and size \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{A. Box-built objects: the side panel of a vending machine.}
+The first vending machine stands at $(2.4,0,-4.5)$ and is not turned. Its right side panel is a cube
+with $S=(0.04,1.86,0.8)$ and $T=(0.48,1.0,0)$ inside the machine:
+\[
+\mathbf{p}_{world} = T(2.4,0,-4.5)\cdot T(0.48,1.0,0)\cdot S(0.04,1.86,0.8)\cdot\mathbf{v}.
+\]
+For corner $v_6=(0.5,0.5,0.5)$: scaling gives $(0.02,0.93,0.40)$, moving inside the machine gives
+$(0.50,1.93,0.40)$, and moving the machine into the room gives $(2.90,1.93,-4.10)$. All 8 corners:
+
+\begin{table}[H]
+\centering\small
+\caption{The 8 corners of the vending machine side panel, step by step}\label{tab:vendcorners}
+\begin{tabular}{@{}c c c c c@{}}
+\toprule
+Corner & unit $\mathbf{v}$ & after $S$ & after $T$ (machine space) & world \\ \midrule
+$v_0$ & $(-.5,-.5,-.5)$ & $(-.02,-.93,-.40)$ & $(.46,.07,-.40)$ & $(2.86,0.07,-4.90)$ \\
+$v_1$ & $(\ .5,-.5,-.5)$ & $(\ .02,-.93,-.40)$ & $(.50,.07,-.40)$ & $(2.90,0.07,-4.90)$ \\
+$v_2$ & $(\ .5,\ .5,-.5)$ & $(\ .02,\ .93,-.40)$ & $(.50,1.93,-.40)$ & $(2.90,1.93,-4.90)$ \\
+$v_3$ & $(-.5,\ .5,-.5)$ & $(-.02,\ .93,-.40)$ & $(.46,1.93,-.40)$ & $(2.86,1.93,-4.90)$ \\
+$v_4$ & $(-.5,-.5,\ .5)$ & $(-.02,-.93,\ .40)$ & $(.46,.07,\ .40)$ & $(2.86,0.07,-4.10)$ \\
+$v_5$ & $(\ .5,-.5,\ .5)$ & $(\ .02,-.93,\ .40)$ & $(.50,.07,\ .40)$ & $(2.90,0.07,-4.10)$ \\
+$v_6$ & $(\ .5,\ .5,\ .5)$ & $(\ .02,\ .93,\ .40)$ & $(.50,1.93,\ .40)$ & $(2.90,1.93,-4.10)$ \\
+$v_7$ & $(-.5,\ .5,\ .5)$ & $(-.02,\ .93,\ .40)$ & $(.46,1.93,\ .40)$ & $(2.86,1.93,-4.10)$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+The panel is 4 cm thick ($2.86\to2.90$), 1.86 m tall ($0.07\to1.93$) and 80 cm deep ($-4.90\to-4.10$),
+exactly as asked. The other two machines only change the first $T$ to $x=3.7$ and $x=5.0$. The ATM,
+the sofa, the shelves and the walls are made of many such boxes, each with its own $S$ and $T$
+(see the part tables in \Cref{sec:objects}).
+
+\paragraph{B. Round objects: a car tyre.}
+A tyre is a cylinder of size $S=(0.64,0.22,0.64)$ turned by $R_z(90^\circ)$, so its axis points
+sideways along $x$. It sits in the wheel node $T(-0.78,0.32,1.325)$ (front wheel, driver side) of
+the car. With $R_z(90^\circ)$: $(x,y,z)\mapsto(-y,\ x,\ z)$.
+\begin{table}[H]
+\centering\small
+\caption{Three vertices of the front tyre (car space)}
+\begin{tabular}{@{}l c c c c@{}}
+\toprule
+Vertex & unit $\mathbf{p}$ & after $S$ & after $R_z(90^\circ)$ & after wheel $T$ \\ \midrule
+$\mathbf{p}_0^{top}$ & $(0.5,0.5,0)$ & $(0.32,0.11,0)$ & $(-0.11,0.32,0)$ & $(-0.89,0.64,1.325)$ \\
+$\mathbf{p}_0^{bot}$ & $(0.5,-0.5,0)$ & $(0.32,-0.11,0)$ & $(0.11,0.32,0)$ & $(-0.67,0.64,1.325)$ \\
+$\mathbf{p}_6^{top}$ & $(0,0.5,0.5)$ & $(0,0.11,0.32)$ & $(-0.11,0,0.32)$ & $(-0.89,0.32,1.645)$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+The top of the tyre is at $y=0.64$, which is twice the wheel radius, so the tyre touches the ground
+at $y=0$. The outer face is at $x=-0.89$ and the inner face at $x=-0.67$ (22 cm wide). When the car
+moves, two more matrices are put in front: the spin $R_x(\theta_{spin})$ and the car's own
+$T(\mathbf{p}_{car})R_y(\psi)$. A can, a cup or a lamp pole uses the same cylinder vertices, just
+standing up (no $R_z$).
+
+\paragraph{C. Jointed models: the knee of a person and the car door.}
+A person is a chain of nodes (\Cref{fig:humangraph}). The knee of the man's left leg is found with
+\[
+\mathbf{p}_{knee} = \underbrace{T(\mathbf{p})R_y(\psi)}_{\text{person}}\cdot
+\underbrace{T(0,0.93,0)}_{\text{pelvis}}\cdot
+\underbrace{T(0.092,-0.03,0)\,R_x(\theta_{thigh})}_{\text{hip}}\cdot
+\underbrace{T(0,-0.45,0)}_{\text{knee}}\cdot(0,0,0).
+\]
+$R_x(\theta)$ maps $(x,y,z)\mapsto(x,\ y\cos\theta - z\sin\theta,\ y\sin\theta + z\cos\theta)$. In
+person space:
+\begin{itemize}
+  \item standing, $\theta_{thigh}=0$: knee at $(0.092,\ 0.90-0.45,\ 0) = (0.092,\ 0.45,\ 0)$;
+  \item walking, leg forward, $\theta_{thigh}=-26^\circ$: $(0.092,\ 0.90-0.45\cos26^\circ,\ 0.45\sin26^\circ) = (0.092,\ 0.496,\ 0.197)$.
+\end{itemize}
+The knee moves 20 cm forward and 4.6 cm up, and the shin and the foot follow it because they are
+its children. The thigh itself is a truncated cone flipped by $R_x(180^\circ)$, which maps
+$(x,y,z)\mapsto(x,-y,-z)$: the wide bottom ring vertex $(0.5,-0.5,0)$ becomes, after
+$S(0.17,0.45,0.17)$, $R_x(180^\circ)$ and $T(0,-0.225,0)$, the point $(0.085,0,0)$, which is at the hip.
+So the wide end of the thigh is at the top, like a real leg.
+
+The woman uses exactly the same chain; her model only has $S(0.95)$ at the root and a width
+factor $0.94$, so her hip is at $x=0.092\times0.94=0.086$.
+
+The \textbf{car door} works the same way with $R_y$. Its hinge is at $\mathbf{h}=(-0.905,0,0.73)$ in car
+space, and the outer door panel is a cube with $S=(0.04,0.534,1.0)$ and $T=(-0.01,0.582,-0.5)$ inside
+the door node $T(\mathbf{h})R_y(\theta_{door})$. The rear-bottom corner $v_0=(-.5,-.5,-.5)$ becomes
+$(-0.03,0.315,-1.0)$ in door space. Then, with $R_y(\theta)$: $x'=x\cos\theta+z\sin\theta$, $z'=-x\sin\theta+z\cos\theta$:
+\begin{itemize}
+  \item door closed, $\theta=0^\circ$: $(-0.03,0.315,-1.0)+\mathbf{h} = (-0.935,\ 0.315,\ -0.27)$;
+  \item door open, $\theta=70^\circ$: $(-0.950,\ 0.315,\ -0.314)+\mathbf{h} = (-1.855,\ 0.315,\ 0.416)$.
+\end{itemize}
+The back edge of the door swings 92 cm out to the side and moves forward, while the points on the
+hinge line do not move at all.
+
+\paragraph{Windows: a matrix made straight from the corner points.}
+Car windows are not rectangles, so they are not made with $T\cdot R\cdot S$. Instead the matrix is
+built from the corner points the window must have. For a parallelogram with corners $\mathbf{a}$,
+$\mathbf{b}$, $\mathbf{d}$ (and $\mathbf{b}+\mathbf{d}-\mathbf{a}$):
+\[
+M = \begin{bmatrix} \mathbf{b}-\mathbf{a} & \mathbf{d}-\mathbf{a} & t\,\hat{\mathbf{n}} & \mathbf{a}+\tfrac12(\mathbf{b}-\mathbf{a})+\tfrac12(\mathbf{d}-\mathbf{a}) \\ 0&0&0&1\end{bmatrix},
+\qquad \hat{\mathbf{n}}=\frac{(\mathbf{b}-\mathbf{a})\times(\mathbf{d}-\mathbf{a})}{|(\mathbf{b}-\mathbf{a})\times(\mathbf{d}-\mathbf{a})|}
+\]
+where $t$ is the glass thickness. Then the cube corner $(-.5,-.5,0)$ lands exactly on $\mathbf{a}$,
+$(.5,-.5,0)$ on $\mathbf{b}$ and $(-.5,.5,0)$ on $\mathbf{d}$. A triangle is done the same way with
+the wedge: $w_1\to\mathbf{p}_0$, $w_0\to\mathbf{p}_1$, $w_2\to\mathbf{p}_2$. Each side window is one
+parallelogram plus one triangle (a small quarter glass at the front, or a painted panel at the back),
+so no glass sticks out past the pillars.
+
+\paragraph{D. Plants: the root fins of a rainforest tree.}
+A tree has 4 buttress fins around its trunk. Fin $i$ is a wedge with $S=(0.13,1.5,1.2)$ and
+$T=(0,0.75,0.6)$ inside a node turned by $R_y(90^\circ i)$ (plus a small random angle):
+\begin{itemize}
+  \item bottom-front vertex $w_0=(-.5,-.5,.5)$: $S\to(-0.065,-0.75,0.6)$, $T\to(-0.065,0,1.2)$, then $R_y(90^\circ)\to(1.2,\ 0,\ 0.065)$;
+  \item top-back vertex $w_2=(-.5,.5,-.5)$: $S\to(-0.065,0.75,-0.6)$, $T\to(-0.065,1.5,0)$, then $R_y(90^\circ)\to(0,\ 1.5,\ 0.065)$.
+\end{itemize}
+So each fin starts on the trunk 1.5 m above the ground and reaches the ground 1.2 m away from it,
+and the four $R_y$ angles spread the fins around the tree. Grass and ferns are cross cards placed
+with $T(\mathbf{p})R_y(\text{random})S(w,h,w)$: the card vertex $(0.5,1,0)$ becomes the tip of a
+blade at height $h$.
 
 \subsection{The \texttt{Node} helper}
 Objects are written as trees of \texttt{Node}s. A child node only stores the extra transform
@@ -365,7 +590,7 @@ first $k$ parts through. The limiter is how the ``build stage'' pictures below w
 \end{figure}
 
 % =============================================================================
-\section{Building Every Object from Basic Shapes}
+\section{Building Every Object from Basic Shapes}\label{sec:objects}
 \Cref{tab:parts} lists how many basic shapes each object uses and which ones. The numbers are
 counted by the program itself (a counting sink). After the table, each important object is
 explained with its parts and transformations. The \emph{build stage} strips show the object while
@@ -528,7 +753,7 @@ Object & Construction \\ \midrule
 Sofa ($n$ seats) & width $W=0.72n+0.32$; base box, back box; per seat: cushion box + front roll cylinder ($R_z 90^\circ$) + back cushion box tilted $R_x(-10^\circ)$; two arms (box + rolled cylinder $R_x 90^\circ$); 4 wooden leg cylinders; throw pillows (boxes rotated in 3 axes) \\
 Armchair & the same function with $n=1$ \\
 Coffee table & top and shelf boxes, 4 metal leg boxes, magazines (thin boxes), fruit bowl (hemisphere with negative $y$ scale) + spheres \\
-Bookshelf & 2 side boards, top, back, plinth, 5 shelves; books are boxes with the procedural \emph{books} texture (mesh UVs). Each shelf uses two blocks of different widths, one turned $180^\circ$, so the pattern does not repeat \\
+Bookshelf & 2 side boards, top, back, plinth, 5 shelves; each row of books is a plain box (page colour) with a quad in front carrying the procedural \emph{books} texture. Each shelf uses two rows of different widths, and on every second shelf one quad is mirrored (negative $x$ scale), so the pattern does not repeat \\
 Wall clock & torus rim ($R_x 90^\circ$), face cylinder, 12 ticks (each in a node $R_z(-30^\circ i)$), hands $R_z(-30^\circ h)$ and $R_z(-6^\circ m)$. The hands show the \emph{in-game} time \\
 Pendant lamp & ceiling disc, cord cylinder, shade (truncated cone), diffuser disc, bulb sphere (emissive when on) \\
 Street lamp & concrete base cylinder, tapered pole (truncated cone), arm cylinder $R_x 90^\circ$, head (tapered box $R_x 180^\circ$), glowing lens \\
@@ -548,9 +773,23 @@ Others & table lamps, floor lamp, potted plants (3 kinds), counters with cabinet
 
 % -----------------------------------------------------------------------------
 \subsection{People}
-A person has 41 parts (\Cref{fig:humangraph}). Different looks come from a random seed: skin, hair
-colour and style (short, long, bun, cap), shirt, trousers, shoes, height ($0.92$--$1.06$), body width,
-long or short sleeves, glasses, and a long kurta-style skirt.
+A person has about 50 parts (\Cref{fig:humangraph}). To keep things simple there are only two types,
+each with one fixed colour scheme. Both use the same hierarchy and the same code; only a few numbers
+and colours differ (\Cref{tab:humantypes}). The player's own body is the man.
+
+\begin{table}[H]
+\centering\small
+\caption{The two types of people}\label{tab:humantypes}
+\begin{tabular}{@{}lll@{}}
+\toprule
+ & Man (type 0) & Woman (type 1) \\ \midrule
+Hair & short: hemisphere + sphere & long: hemisphere + a tall flat sphere behind the head \\
+Top & blue shirt & red kurta (the hips are red too, no belt) \\
+Lower body & dark trousers & light trousers + kurta hem (upside-down truncated cone) \\
+Size & height $S=1.0$, width $w=1.0$ & height $S=0.95$, width $w=0.94$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{table}[H]
 \centering\small
@@ -558,16 +797,16 @@ long or short sleeves, glasses, and a long kurta-style skirt.
 \begin{tabularx}{\linewidth}{@{}P{3.2cm}P{3.1cm}P{3.1cm}X@{}}
 \toprule
 Part & Shape & Size & Placement \\ \midrule
-Pelvis + belt & cylinder, cube & $(.34w,.18,.21)$ & pelvis node at $y = 0.93 - drop + bob$ \\
-Thigh, knee, shin & cylinder, sphere, cylinder & $(.15w,.45,.16)$, $(.12w,.42,.13)$ & hip joint $(\pm.095w,-.03,0)$, $R_x(\theta_{thigh})$; knee joint $T(0,-.45,0)R_x(\theta_{knee})$ \\
-Shoe + sole & cubes & $(.11,.07,.26)$ & ankle node, toes point $+z$ \\
-Abdomen, chest & cylinder, sphere & $(.31w,.26,.20)$, $(.40w,.36,.25)$ & torso node $T(0,.08,0)R_x(lean)$ \\
-Upper chest & tapered box $R_z(180^\circ)$ & $(.38w,.18,.22)$ & upside down, so it is wide at the shoulders \\
-Shoulders, collar & spheres, torus & & $(\pm.19w,.42,0)$ \\
-Head & sphere & $(.20,.245,.215)$ & neck node, then $R_y(\text{headYaw})R_x(\text{headPitch})$ \\
+Pelvis + belt & cylinder, cube & $(.34w,.18,.21)$ & pelvis node at $y = 0.93 - drop + bob$ (the woman has no belt) \\
+Hip joint, thigh, knee, shin & sphere, truncated cone (upside down), sphere, truncated cone & thigh $(.17w,.45,.17)$, shin $(.135w,.42,.135)$ & hip joint $(\pm.092w,-.03,0)$, $R_x(\theta_{thigh})$; knee joint $T(0,-.45,0)R_x(\theta_{knee})$. The cones are flipped with $R_x(180^\circ)$, so legs are thicker at the top \\
+Ankle, shoe, toe, sole & sphere, cube, cylinder, cube & $(.11,.07,.26)$ & ankle node, toes point $+z$; rounded toe = cylinder $R_z(90^\circ)$ \\
+Waist & cylinder & $(.30w,.22,.19)$ & torso node $T(0,.08,0)R_x(lean)$ \\
+Chest & tapered box $R_z(180^\circ)$ & $(.42w,.30,.23)$ & upside down, so it is wide at the shoulders and narrow at the waist (V shape) \\
+Shoulder line, joints, collar & cylinder $R_z 90^\circ$, spheres, torus & joints $.115$ & joints at $(\pm.215w,.425,0)$, exactly where the arms start \\
+Neck, head, jaw & cylinder, spheres & head $(.20,.245,.215)$ & neck node, then $R_y(\text{headYaw})R_x(\text{headPitch})$ \\
 Face & spheres + boxes & & eyes (white + pupil), nose, ears, eyebrows, mouth; glasses = 2 tori \\
-Hair & hemisphere (+ sphere / box) & & 4 styles \\
-Upper arm, forearm, hand & cylinder, cylinder, sphere & $(.095,.29,.095)$, $(.08,.26,.08)$ & shoulder $R_x(\theta_s)R_z(\pm out)$, elbow $R_x(\theta_e)$; a held item (can, cup, snack, phone) is a child of the right hand \\
+Hair & hemisphere (+ sphere) & & 2 styles (short, long) \\
+Upper arm, elbow, forearm, hand, thumb & truncated cones (flipped), spheres & $(.11,.29,.11)$, $(.088,.26,.088)$ & shoulder $R_x(\theta_s)R_z(\pm out)$, elbow $R_x(\theta_e)$; arms taper towards the wrist; a held item (can, cup, snack, phone) is a child of the right hand \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -584,42 +823,44 @@ every angle is blended linearly over $0.35$ s.
 \begin{figure}[H]\centering\includegraphics[width=\linewidth]{stages_human}\caption{Person build stages.}\end{figure}
 \begin{figure}[H]
 \centering
-\begin{subfigure}{0.3\linewidth}\includegraphics[width=\linewidth]{obj_human}\caption{Standing, holding a cup}\end{subfigure}
-\begin{subfigure}{0.3\linewidth}\includegraphics[width=\linewidth]{obj_human_walk}\caption{Walking pose}\end{subfigure}
+\begin{subfigure}{0.3\linewidth}\includegraphics[width=\linewidth]{obj_human}\caption{Woman, standing with a cup}\end{subfigure}
+\begin{subfigure}{0.3\linewidth}\includegraphics[width=\linewidth]{obj_human_walk}\caption{Man, walking pose}\end{subfigure}
 \begin{subfigure}{0.3\linewidth}\includegraphics[width=\linewidth]{obj_human_sit}\caption{Sitting on a chair}\end{subfigure}
-\caption{Poses of the same hierarchical model.}
+\caption{The two types and their poses, all from the same hierarchical model.}
 \end{figure}
 
 % -----------------------------------------------------------------------------
 \subsection{Cars}
-There are three types (sedan $4.4\times1.78\times1.42$ m, SUV and hatchback) in nine paint colours.
+There is one car model, a sedan of $4.4\times1.78\times1.42$ m, painted in one of three colours:
+red, blue or white. The colour is the only difference, so all three use the same vertices and
+matrices (the tyre and door examples in \Cref{sec:worked} are from this car).
 \begin{table}[H]
 \centering\small
 \caption{Parts of a car}
 \begin{tabularx}{\linewidth}{@{}lX@{}}
 \toprule
 Part & Construction \\ \midrule
-Body & big box, rounded nose (cylinder lying along $x$, $R_z 90^\circ$), bumpers, underbody \\
+Body & a front block and a rear block (boxes), a thin passenger-side skin and a floor in between, rounded nose (cylinder lying along $x$, $R_z 90^\circ$), bumpers, underbody. The driver-door area is left \emph{open}, so an opened door shows the inside of the car, not a second door \\
 Bonnet & wedge that slopes down towards the front; boot lid box \\
-Cabin & tapered box made of tinted \emph{transparent} glass, so the driver is visible; roof box; SUV uses an upright glass box + roof rails \\
+Cabin & roof box + tinted \emph{transparent} glass (windscreen, rear window, 4 side windows), so the driver is visible. Each window is a thin parallelogram (\texttt{panel}) plus, where needed, a triangle (\texttt{tri}, a wedge); both matrices are built straight from the corner points (\Cref{sec:worked}). The windscreen and rear window get painted corner triangles, the front side windows a small quarter glass with a divider bar, and the rear side windows a painted C-pillar triangle \\
 Pillars & thin boxes stretched between two points by a ``beam'' helper: the box's $y$ axis is turned onto $\mathbf{b}-\mathbf{a}$ with the rotation $\mathbf{y}\times\mathbf{d}$ by $\operatorname{atan2}(|\mathbf{y}\times\mathbf{d}|,\ \mathbf{y}\cdot\mathbf{d})$ \\
 Interior & seats, rear bench, dashboard, steering wheel (torus $R_x 70^\circ$) \\
 Lights & head lights (emissive at night + real spot lights), tail and brake lights, reverse lights, blinking orange indicators \\
 Wheels (4) & dark wheel well, tyre cylinder $(2R,.22,2R)$ $R_z90^\circ$, chrome rim, 3 spokes, hub; node $R_y(steer)$ for the front wheels, then $R_x(spin)$ \\
-Driver door & child node $T(hinge)\cdot R_y(\theta_{door})$; it opens to $70^\circ$ when the NPC gets in or out \\
+Driver door & child node $T(hinge)\cdot R_y(\theta_{door})$ holding the outer panel, inner trim, arm rest, handle and \emph{its own window}. The window corners are the same points as in the car minus the hinge position, so the glass swings out with the door. It opens to $70^\circ$ when the NPC gets in or out \\
 \bottomrule
 \end{tabularx}
 \end{table}
 The wheels turn with $\theta_{spin} \mathrel{+}= \Delta s / R$, where $\Delta s$ is the distance driven. The
 steering angle follows the car's turning rate, $\delta = \arctan\!\big(L_{wb}\,\Delta\psi/\Delta s\big)$, where
 $L_{wb}$ is the wheel base and $\Delta\psi$ is the change of heading.
-\begin{figure}[H]\centering\includegraphics[width=\linewidth]{stages_sedan}\caption{Sedan build stages (the driver is a person model sitting in the drive pose).}\end{figure}
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{stages_car_red}\caption{Car build stages (the driver is a person model sitting in the drive pose).}\end{figure}
 \begin{figure}[H]
 \centering
-\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{obj_sedan}\caption{Sedan, door open}\end{subfigure}
-\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{obj_suv}\caption{SUV}\end{subfigure}
-\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{obj_hatchback}\caption{Hatchback}\end{subfigure}
-\caption{The three car types.}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{obj_car_red}\caption{Red}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{obj_car_blue}\caption{Blue}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{obj_car_white}\caption{White}\end{subfigure}
+\caption{The one car model in its three colours (driver door opened to $55^\circ$).}
 \end{figure}
 
 % -----------------------------------------------------------------------------
@@ -661,8 +902,9 @@ closed they also block the player.
 \begin{itemize}
   \item \emph{Rainforest tree}: low-poly cylinder trunk (6.5--9 m), 4 \textbf{buttress roots}
         (wedges rotated $R_y(90^\circ i)$), 3 branches (cylinders in nodes $R_y(yaw)R_x(45$--$60^\circ)$),
-        and an irregular crown of 6--8 foliage blobs (scaled low spheres with a leaf texture),
-        each covered by 2 alpha-tested \textbf{leaf cards}. Some branches carry hanging vines.
+        and a crown made mostly of \textbf{leaf cards}: 15--19 alpha-tested cards, each turned randomly
+        in all three axes and placed on an ellipsoid shell, plus 3 small dark core blobs inside that give
+        volume. Every card gets a slightly different green. Some branches carry hanging vines.
   \item \emph{Coconut palm}: a chain of 7 trunk segments. Each segment is a child of the previous
         one with an extra $R_x(3$--$7^\circ)$, so the trunk bends smoothly. 9 fronds, each made of two
         quads (the second is a child of the first and droops by another $30$--$45^\circ$), and 4 coconuts.
@@ -670,11 +912,11 @@ closed they also block the player.
   \item \emph{Bamboo clump}: 9--15 tilted culms (thin cylinders) with node rings and leaf cards.
   \item \emph{Banana plant}: 1--3 pseudo-stems with 5--8 long leaves (spheres flattened to
         $(0.55,0.04,1.9)$), sometimes with a banana bunch.
-  \item \emph{Undergrowth}: bushes (blobs + leaf cards, some with flowers), ferns (5 arched frond quads +
+  \item \emph{Undergrowth}: bushes (one small dark core + 5--7 leaf cards, some with flowers), ferns (5 arched frond quads +
         a cross card), grass tufts and flower cards, rocks (1--3 rotated, squashed low spheres with a rock
         texture) and fallen logs (horizontal cylinder + moss blobs + mushrooms made of a cylinder and a hemisphere).
 \end{itemize}
-\begin{figure}[H]\centering\includegraphics[width=\linewidth]{stages_tree}\caption{Rainforest tree build stages: trunk, buttress roots, branches, then crown blobs and leaf cards.}\end{figure}
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{stages_tree}\caption{Rainforest tree build stages: trunk, buttress roots, branches, then the core blobs and the leaf cards.}\end{figure}
 \begin{figure}[H]\centering\includegraphics[width=\linewidth]{stages_palm}\caption{Palm build stages: the chained trunk segments bend a little more at each joint.}\end{figure}
 \begin{figure}[H]
 \centering
@@ -726,7 +968,9 @@ factor, $s$ is the shadow factor and $E$ is the emission (screens, LEDs, bulbs).
 \emph{hemisphere} lighting: surfaces facing up get the sky colour and surfaces facing down get the
 ground colour. Inside the building the ambient part is multiplied by 0.45, because the roof blocks
 the sky. Leaves and grass use soft ``wrap'' lighting, $0.6\,\mathbf{N}\!\cdot\!\mathbf{L}+0.4$, and are
-lit from both sides.
+lit from both sides. When you look towards the sun through leaves, a \emph{translucency} term
+$0.45\,k_d\,I\,s\,\max(-\mathbf{V}\cdot\mathbf{L},0)^3$ makes them glow yellow-green, like real thin
+leaves. Leaf cards are also a little darker at their base (a cheap kind of ambient occlusion).
 
 \textbf{Attenuation} uses a smooth window, so every light really ends at its range $r$ and can be skipped
 beyond it:
@@ -841,7 +1085,7 @@ fern, palm frond, flowers, vine) whose alpha channel marks where the leaf is.
 Shadows use \textbf{shadow mapping} (\Cref{fig:shadowidea}).
 \begin{enumerate}
   \item \textbf{Depth pass}: the scene is drawn from the sun with an orthographic camera
-        ($\pm42$ m box around the player, 2048$\times$2048 depth texture). Only depth is stored.
+        ($\pm32$ m box around the player, 2048$\times$2048 depth texture, so one texel is about 3 cm). Only depth is stored.
   \item \textbf{Main pass}: every pixel is moved into the light's space,
         $\mathbf{p}_{L} = P_L V_L\,(\mathbf{p}+0.05\,\mathbf{N})$. If its depth is larger than the stored depth,
         it is in shadow.
@@ -1124,6 +1368,15 @@ Tree trunks and people are circles. Gravity and jumping use $v_y \mathrel{-}= 12
   \item \textbf{Culling}: a chunk is skipped if its bounding box is outside the view frustum (6 planes taken
         from the view-projection matrix) or more than 165 m away. Small things have shorter ranges:
         grass and flowers 45 m, and bushes, ferns and leaf cards 85 m.
+  \item \textbf{Front-to-back order + occlusion culling}: visible chunks are drawn from near to far. For every
+        chunk the GPU answers an \emph{occlusion query} (``was any pixel of it visible?''). A chunk that was
+        completely hidden last frame (for example the jungle behind the back wall when you stand inside) is
+        skipped. Only its bounding box is drawn, invisibly, to ask again. Results are read one frame later,
+        so the CPU never waits for the GPU.
+  \item \textbf{Depth pre-pass}: the scene is first drawn with a tiny depth-only shader. Then the full
+        lighting shader runs with \texttt{GL\_LEQUAL} and depth writing off, so \emph{each pixel is lit exactly
+        once}. Before this, walls, the terrain under the floor and hidden leaves were all lit and then painted
+        over. Both shaders mark \texttt{gl\_Position} as \texttt{invariant}, so the depths match exactly.
   \item \textbf{Shadow pass} only draws chunks inside the light's box, and skips grass and glass.
   \item \textbf{Per-room light lists} and frustum culling of lights (see the Lighting section).
   \item \textbf{Moving objects} are written into streaming buffers once per frame. Transparent objects are
@@ -1136,16 +1389,19 @@ Tree trunks and people are circles. Gravity and jumping use $v_y \mathrel{-}= 12
 
 \subsection{Measured speed}
 The program measures itself (\texttt{--shots} mode, with no frame cap, 60 frames per view, 1280$\times$720,
-4$\times$MSAA, Intel Iris Xe). The triangle count includes the shadow pass.
+4$\times$MSAA, Intel Iris Xe). The triangle count includes the shadow pass and the depth pre-pass.
 \begin{table}[H]
 \centering\small
 \caption{Frame time without the cap}
 \input{generated/bench_table.tex}
 \end{table}
-Every view runs faster than 60 FPS even in Enhanced mode, so the 60 FPS cap always holds. During
-development, three optimisations made the biggest difference: per-room light lists, larger chunks
-(fewer draw calls) and frustum culling of lights. Together they raised the slowest view from 37 to
-over 60 FPS.
+Every view runs faster than 60 FPS even in Enhanced mode, so the 60 FPS cap always holds.
+During development, the worst case was standing right in front of the vending machines: only
+36 FPS. The GPU timers built into the program showed that 20 ms of the frame went into drawing the static
+world. The jungle behind the back wall was drawn although it was hidden, and every wall and floor pixel
+was lit several times. After occlusion culling and the depth pre-pass the same view takes about 11 ms
+(over 85 FPS), and the lounge went from 63 to 88 FPS. Earlier optimisations (per-room light lists, larger
+chunks and frustum culling of lights) had already raised the slowest outdoor view from 37 to over 60 FPS.
 
 % =============================================================================
 \section{Controls}
@@ -1198,10 +1454,16 @@ OK, push the flap, take the change. \textbf{ATM:} insert the card, PIN \texttt{1
 \toprule
 Problem & Solution \\ \midrule
 Thousands of shapes made the GPU slow & instancing, a static world in chunks, culling and LOD distances \\
+Very slow in front of the vending machines (36 FPS) & GPU timers found the cause (hidden jungle + pixels lit many times); fixed with occlusion queries and a depth pre-pass (now over 85 FPS) \\
+Flickering stripes on screens and panels (z-fighting) & no two surfaces share a depth any more: each layer (panel, glow, text) is a few millimetres in front of the one below; road markings sit 1.5 cm above the asphalt \\
 Many lights per pixel were costly & per-room light regions and frustum culling of lights \\
 Light leaked through walls & each room only uses its own lights \\
 Shadow acne and shimmering & slope bias, normal offset, polygon offset, light box snapped to texels \\
-Trees looked like ``mushrooms'' & irregular crowns made of many blobs plus alpha-tested leaf cards \\
+Trees and bushes looked like green balls & crowns made of many randomly turned leaf cards around a small dark core, a better leaf texture, translucency and leaf shading \\
+An opening car door showed a second, closed door & the body is hollow under the door, and the door carries its own window pane \\
+Car glass stuck out past the pillars & each window was a rectangle (the average of its edges); now its matrix is built from the exact corner points, as a parallelogram plus a triangle \\
+Flicker at door frames and a low wall across the main entrance & door trims overlap the wall end instead of sharing its face, the sliding door is a simple pane with rails, and the base strip stops at the doorway \\
+Leaves thinned out in the distance & the cut-out threshold drops from 0.5 to 0.28 with distance (the same rule in both passes) \\
 Text on machine screens & one GDI font atlas, and text quads laid on a canvas in 3D \\
 Cars blocking each other in the lot & one ``lot token'' for parking or unparking, plus look-ahead braking \\
 The driver's head went through the roof & the seat height was tuned for each car type \\

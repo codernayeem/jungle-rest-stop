@@ -24,8 +24,9 @@ struct RenderSettings {
     bool shadows = true;
     bool fog = true;
     bool wind = true;
+    bool occlusion = true;   // GPU occlusion queries skip hidden chunks
     int shadowRes = 2048;
-    float shadowRadius = 42.0f;
+    float shadowRadius = 32.0f;
 };
 
 struct PointLightGPU { Vec3 pos; Vec3 color; float range; };
@@ -98,7 +99,7 @@ public:
     bool saveShadowMap(const std::string& path) const;   // depth image as seen from the sun (report figure)
 
     // statistics for the HUD / report
-    int statDrawCalls = 0, statInstances = 0, statChunksVisible = 0, statChunksTotal = 0;
+    int statDrawCalls = 0, statInstances = 0, statChunksVisible = 0, statChunksTotal = 0, statChunksOccluded = 0;
     long long statTriangles = 0;
     size_t staticInstanceCount() const { return m_staticCount; }
 
@@ -115,7 +116,14 @@ private:
     GLuint makeVao(MeshId mesh, GLuint instanceVbo, GLsizeiptr baseOffset);
 
     struct Batch { MeshId mesh; int lod; bool cast; GLuint vao; GLsizei count; };
-    struct Chunk { Vec3 mn, mx; GLuint vbo = 0; std::vector<Batch> batches; };
+    struct Chunk {
+        Vec3 mn, mx;
+        GLuint vbo = 0;
+        std::vector<Batch> batches;
+        // occlusion culling: a GPU query tells if any pixel of the chunk was visible
+        GLuint query = 0;
+        bool pending = false, occluded = false, global = false;
+    };
 
     struct StaticCollector : DrawSink {
         Renderer* r;
@@ -128,7 +136,8 @@ private:
     struct PendingStatic { int key; int chunk; InstanceData d; Vec3 c; float r; };
     struct TransInst { MeshId mesh; float dist; InstanceData d; };
 
-    void drawChunks(bool shadowPass, const Frustum& fr, const Vec3& cam);
+    void drawChunks(bool shadowPass, const Frustum& fr, const Vec3& cam);   // shadow pass or depth pre-pass
+    void drawChunkList();                                                  // shading pass (chunks found visible)
     void drawDynamicOpaque();
     void renderShadowMap(const FrameInfo& f);
     void renderSky(const FrameInfo& f);
@@ -136,8 +145,10 @@ private:
 
     Mesh m_meshes[M_COUNT];
     TextureArray m_textures;
-    Shader m_main, m_depth, m_sky;
-    GLuint m_skyVao = 0;
+    Shader m_main, m_depth, m_sky, m_proxy;
+    GLuint m_skyVao = 0, m_proxyVao = 0;
+    std::vector<int> m_visibleChunks, m_occludedChunks, m_drawList;
+    std::vector<float> m_drawDist;
 
     StaticCollector m_staticSink;
     DynamicCollector m_dynSink;

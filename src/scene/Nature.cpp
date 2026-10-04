@@ -10,10 +10,26 @@ Vec3 jitterColor(const Vec3& c, Rng& r, float amt) {
     float k = r.range(1.0f - amt, 1.0f + amt);
     return Vec3(c.x * k * r.range(0.95f, 1.05f), c.y * k, c.z * k * r.range(0.9f, 1.1f));
 }
-Material foliageBlob(const Vec3& c) {
-    Material m(c, 0.05f, 8.0f);
-    m.tx(TEX_LEAVES, 0.7f);   // gives the blob a leafy texture (box mapped)
-    return m;
+// A tree crown: a few small dark blobs give it volume (and stop you seeing
+// straight through), then many alpha-tested leaf cards, each turned randomly
+// in 3D and placed on an ellipsoid shell, make the leafy outline.
+void leafCrown(const Node& n, const Vec3& c, const Vec3& radii, float s, const Vec3& leafCol, Rng& rng, int cards) {
+    Material core = Material(leafCol * 0.38f, 0.02f, 4.0f).fl(MF_FOLIAGE);
+    int cores = 3;
+    for (int k = 0; k < cores; ++k) {
+        Vec3 p = c + Vec3(rng.range(-0.35f, 0.35f) * radii.x, rng.range(-0.3f, 0.2f) * radii.y, rng.range(-0.35f, 0.35f) * radii.z);
+        n.part(M_SPHERE_LOW, p, Vec3(radii.x, radii.y, radii.z) * rng.range(0.55f, 0.7f), core,
+               {0, rng.range(0.0f, 180.0f), 0});
+    }
+    for (int q = 0; q < cards; ++q) {
+        float th = rng.range(0.0f, 2.0f * PI), y = rng.range(-0.55f, 1.0f);
+        float rr = std::sqrt(std::max(0.0f, 1.0f - y * y));
+        float k = rng.range(0.55f, 1.0f);
+        Vec3 p = c + Vec3(std::cos(th) * rr * radii.x * k, y * radii.y * k, std::sin(th) * rr * radii.z * k);
+        Material m = Mat::leafCard(leafCol * rng.range(0.82f, 1.15f)).lv(1);
+        n.part(M_LEAVES, p, Vec3(rng.range(1.9f, 2.6f) * s), m,
+               {rng.range(-35.0f, 35.0f), rng.range(0.0f, 180.0f), rng.range(-35.0f, 35.0f)});
+    }
 }
 }  // namespace
 
@@ -24,8 +40,6 @@ Material foliageBlob(const Vec3& c) {
 void rainforestTree(const Node& n, float s, Rng& rng) {
     Material bark = Mat::bark(jitterColor(Vec3(0.36f, 0.28f, 0.20f), rng, 0.15f));
     Vec3 leafCol = jitterColor(Vec3(0.24f, 0.46f, 0.16f), rng, 0.2f);
-    Material blob = foliageBlob(leafCol * 0.70f);
-    Material cards = Mat::leafCard(leafCol).lv(1);
     float H = rng.range(6.5f, 9.0f) * s;
 
     // trunk (two stacked cylinders) and buttress-root fins (wedges)
@@ -49,18 +63,7 @@ void rainforestTree(const Node& n, float s, Rng& rng) {
             vw.part(M_QUAD, {0, -vl * 0.5f, 0}, {0.6f * s, vl, 1}, Mat::leafCard(leafCol * 0.9f, TEX_VINE).lv(1), {0, rng.range(0.0f, 180.0f), 0});
         }
     }
-    // irregular canopy: 6-8 overlapping foliage blobs around the crown, each
-    // covered by alpha-tested leaf cards so the outline looks leafy
-    int blobs = rng.irange(6, 8);
-    for (int k = 0; k < blobs; ++k) {
-        float a = rng.range(0.0f, 2.0f * PI), r = rng.range(0.6f, 2.4f) * s;
-        Vec3 c = crown + Vec3(std::cos(a) * r, rng.range(-0.9f, 1.3f) * s, std::sin(a) * r);
-        float bs = rng.range(1.9f, 2.7f) * s;
-        n.part(M_SPHERE_LOW, c, {bs, bs * rng.range(0.70f, 0.85f), bs}, blob, {0, rng.range(0.0f, 180.0f), 0});
-        for (int q = 0; q < 2; ++q)
-            n.part(M_LEAVES, c + Vec3(rng.range(-0.5f, 0.5f) * s, rng.range(0.0f, 0.7f) * s, rng.range(-0.5f, 0.5f) * s),
-                   Vec3(bs * rng.range(1.1f, 1.35f)), cards, {rng.range(-20.0f, 20.0f), rng.range(0.0f, 180.0f), rng.range(-20.0f, 20.0f)});
-    }
+    leafCrown(n, crown, Vec3(2.6f, 1.5f, 2.6f) * s, s, leafCol, rng, rng.irange(15, 19));
 }
 
 // -----------------------------------------------------------------------------
@@ -104,8 +107,6 @@ void palmTree(const Node& n, float s, Rng& rng) {
 void emergentTree(const Node& n, float s, Rng& rng) {
     Material bark = Mat::bark(jitterColor(Vec3(0.55f, 0.50f, 0.44f), rng, 0.1f));
     Vec3 leafCol = jitterColor(Vec3(0.20f, 0.42f, 0.17f), rng, 0.15f);
-    Material blob = foliageBlob(leafCol * 0.68f);
-    Material cards = Mat::leafCard(leafCol).lv(1);
     float H = rng.range(14.0f, 18.0f) * s;
     n.part(M_CYLINDER_LOW, {0, H * 0.5f, 0}, {0.95f * s, H, 0.95f * s}, bark);
     for (int i = 0; i < 5; ++i) {
@@ -117,18 +118,8 @@ void emergentTree(const Node& n, float s, Rng& rng) {
         Node br = n.at({0, H * 0.92f, 0}, {0, b * 90.0f + rng.range(-20.0f, 20.0f), 0}).rotX(rng.range(55.0f, 68.0f));
         br.part(M_CYLINDER_LOW, {0, len * 0.5f, 0}, {0.3f * s, len, 0.3f * s}, bark);
     }
-    // broad, layered crown
-    Vec3 crown(0, H + 1.6f * s, 0);
-    int blobs = rng.irange(8, 10);
-    for (int k = 0; k < blobs; ++k) {
-        float a = rng.range(0.0f, 2.0f * PI), r = rng.range(0.5f, 3.6f) * s;
-        Vec3 c = crown + Vec3(std::cos(a) * r, rng.range(-0.8f, 1.2f) * s - r * 0.12f, std::sin(a) * r);
-        float bs = rng.range(2.3f, 3.2f) * s;
-        n.part(M_SPHERE_LOW, c, {bs, bs * 0.68f, bs}, blob, {0, rng.range(0.0f, 180.0f), 0});
-        for (int q = 0; q < 2; ++q)
-            n.part(M_LEAVES, c + Vec3(rng.range(-0.6f, 0.6f) * s, rng.range(0.0f, 0.8f) * s, rng.range(-0.6f, 0.6f) * s),
-                   Vec3(bs * 1.25f), cards, {rng.range(-15.0f, 15.0f), rng.range(0.0f, 180.0f), 0});
-    }
+    // broad, flat umbrella crown
+    leafCrown(n, Vec3(0, H + 1.4f * s, 0), Vec3(4.2f, 1.3f, 4.2f) * s, s * 1.15f, leafCol, rng, rng.irange(20, 24));
 }
 
 void bambooClump(const Node& n, float s, Rng& rng) {
@@ -171,14 +162,15 @@ void bananaPlant(const Node& n, float s, Rng& rng) {
 }
 
 void bush(const Node& n, float s, Rng& rng) {
-    Vec3 lc = jitterColor(Vec3(0.22f, 0.42f, 0.15f), rng, 0.25f);
-    Material blob = foliageBlob(lc * 0.6f).lv(1);
-    Material cards = Mat::leafCard(lc).lv(1);
-    int k = rng.irange(2, 3);
+    Vec3 lc = jitterColor(Vec3(0.24f, 0.44f, 0.15f), rng, 0.25f);
+    Material core = Material(lc * 0.38f, 0.02f, 4.0f).fl(MF_FOLIAGE).lv(1);
+    n.part(M_SPHERE_LOW, {0, 0.38f * s, 0}, Vec3(1.1f * s, 0.7f * s, 1.1f * s), core, {0, rng.range(0.0f, 180.0f), 0});
+    int k = rng.irange(5, 7);
     for (int i = 0; i < k; ++i) {
-        Vec3 p(rng.range(-0.5f, 0.5f) * s, rng.range(0.35f, 0.6f) * s, rng.range(-0.5f, 0.5f) * s);
-        n.part(M_SPHERE_LOW, p, Vec3(rng.range(1.0f, 1.5f) * s, rng.range(0.8f, 1.1f) * s, rng.range(1.0f, 1.5f) * s), blob);
-        n.part(M_LEAVES, p + Vec3(0, 0.2f * s, 0), Vec3(1.4f * s), cards, {0, rng.range(0.0f, 180.0f), 0});
+        float th = rng.range(0.0f, 2.0f * PI), r = rng.range(0.15f, 0.55f) * s;
+        Vec3 p(std::cos(th) * r, rng.range(0.35f, 0.75f) * s, std::sin(th) * r);
+        n.part(M_LEAVES, p, Vec3(rng.range(1.0f, 1.4f) * s), Mat::leafCard(lc * rng.range(0.85f, 1.15f)).lv(1),
+               {rng.range(-30.0f, 30.0f), rng.range(0.0f, 180.0f), rng.range(-30.0f, 30.0f)});
     }
     if (rng.chance(0.3f)) {  // flowering bush
         Vec3 fc = rng.chance(0.5f) ? Vec3(0.95f, 0.25f, 0.35f) : Vec3(0.98f, 0.75f, 0.2f);

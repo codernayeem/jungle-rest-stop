@@ -50,6 +50,7 @@ HumanPose press(float t);                      // pressing buttons with right ha
 HumanPose bend(float amount);                  // picking something up
 HumanPose blend(const HumanPose& a, const HumanPose& b, float t);
 
-HumanLook randomLook(unsigned seed);
+HumanLook look(int type);            // 0 = man, 1 = woman
+HumanLook randomLook(unsigned seed);  // picks one of the two types
 void draw(const Node& root, const HumanLook& look, const HumanPose& pose, HeldItem held = HELD_NONE);
 }  // namespace Human

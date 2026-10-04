@@ -340,11 +340,11 @@ void VendingMachine::drawStatic(DrawSink& s) const {
             n.cyl({i * 0.42f, 0.025f, j * 0.32f}, {0.06f, 0.05f, 0.06f}, chrome);
         }
     // marquee header (always lit) and trims around the glass
-    n.box({0, 1.86f, FRONT_Z - 0.01f}, {0.94f, 0.12f, 0.02f}, Mat::glow(bodyCols[m_kind] * 0.5f + Vec3(0.4f), 0.7f));
-    n.box({-0.15f, 1.80f, FRONT_Z - 0.02f}, {0.66f, 0.03f, 0.04f}, trim);
-    n.box({-0.15f, 0.645f, FRONT_Z - 0.02f}, {0.66f, 0.03f, 0.04f}, trim);
-    n.box({-0.47f, 1.22f, FRONT_Z - 0.02f}, {0.03f, 1.18f, 0.04f}, trim);
-    n.box({0.175f, 1.22f, FRONT_Z - 0.02f}, {0.03f, 1.18f, 0.04f}, trim);
+    n.box({0, 1.86f, FRONT_Z - 0.002f}, {0.94f, 0.12f, 0.02f}, Mat::glow(bodyCols[m_kind] * 0.5f + Vec3(0.4f), 0.7f));
+    n.box({-0.15f, 1.785f, FRONT_Z - 0.016f}, {0.66f, 0.03f, 0.04f}, trim);
+    n.box({-0.15f, 0.645f, FRONT_Z - 0.016f}, {0.66f, 0.03f, 0.04f}, trim);
+    n.box({-0.47f, 1.215f, FRONT_Z - 0.016f}, {0.03f, 1.11f, 0.04f}, trim);
+    n.box({0.175f, 1.215f, FRONT_Z - 0.016f}, {0.03f, 1.11f, 0.04f}, trim);
     // display cavity + interior tube light (emissive)
     n.box({-0.15f, 1.22f, -0.35f}, {0.64f, 1.14f, 0.02f}, interior);
     n.box({-0.455f, 1.22f, 0}, {0.01f, 1.14f, 0.7f}, interior);
@@ -359,7 +359,7 @@ void VendingMachine::drawStatic(DrawSink& s) const {
     // glass front (transparent)
     n.box({-0.15f, 1.22f, FRONT_Z - 0.015f}, {0.62f, 1.14f, 0.008f}, Mat::glass(0.18f));
     // control panel plate
-    n.box({0.33f, 1.20f, FRONT_Z - 0.02f}, {0.27f, 1.30f, 0.04f}, trim);
+    n.box({0.33f, 1.185f, FRONT_Z - 0.02f}, {0.27f, 1.27f, 0.04f}, trim);
     n.box({0.33f, 0.36f, FRONT_Z - 0.02f}, {0.27f, 0.38f, 0.04f}, body);          // panel below the controls
     n.box({0.33f, 0.36f, FRONT_Z + 0.001f}, {0.20f, 0.12f, 0.004f}, Material(Vec3(0.92f), 0.3f, 32.0f));   // service label
     n.box({0.33f, 1.66f, FRONT_Z + 0.001f}, {0.24f, 0.11f, 0.004f}, Material(Vec3(0.02f, 0.05f, 0.04f), 0.8f, 96.0f));
@@ -376,10 +376,10 @@ void VendingMachine::drawStatic(DrawSink& s) const {
     // collection bay
     n.box({-0.15f, BAY_FLOOR_Y - 0.01f, 0.22f}, {0.6f, 0.02f, 0.34f}, Mat::black());
     n.box({-0.15f, 0.40f, 0.06f}, {0.6f, 0.36f, 0.02f}, Mat::black());
-    n.box({-0.15f, 0.60f, FRONT_Z - 0.02f}, {0.66f, 0.06f, 0.04f}, trim);
-    n.box({-0.15f, 0.19f, FRONT_Z - 0.02f}, {0.66f, 0.04f, 0.04f}, trim);
-    n.box({-0.465f, 0.40f, FRONT_Z - 0.02f}, {0.04f, 0.38f, 0.04f}, trim);
-    n.box({0.165f, 0.40f, FRONT_Z - 0.02f}, {0.04f, 0.38f, 0.04f}, trim);
+    n.box({-0.15f, 0.60f, FRONT_Z - 0.018f}, {0.66f, 0.06f, 0.04f}, trim);
+    n.box({-0.15f, 0.19f, FRONT_Z - 0.018f}, {0.66f, 0.04f, 0.04f}, trim);
+    n.box({-0.465f, 0.40f, FRONT_Z - 0.019f}, {0.04f, 0.34f, 0.04f}, trim);
+    n.box({0.165f, 0.40f, FRONT_Z - 0.019f}, {0.04f, 0.34f, 0.04f}, trim);
 }
 
 // -----------------------------------------------------------------------------
@@ -466,7 +466,7 @@ void VendingMachine::drawScreen(TextRenderer& t) const {
 
     // marquee title
     Canvas m;
-    m.model = translate(m_root, Vec3(0.0f, 1.86f, FRONT_Z + 0.002f));
+    m.model = translate(m_root, Vec3(0.0f, 1.86f, FRONT_Z + 0.011f));
     m.w = 0.94f;
     m.h = 0.12f;
     t.ctext(m, 0.47f, 0.025f, 0.075f, title(), Vec4(1, 1, 1, 1), 1);

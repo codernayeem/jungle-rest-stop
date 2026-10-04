@@ -144,29 +144,31 @@ Px genBark(float u, float v) {
     return detail(d, d * 0.95f, d * 0.88f);
 }
 
-// alpha cut-out: cluster of leaves
+// alpha cut-out: a round cluster of many small pointed leaves. Leaves drawn
+// later lie on top; deeper (earlier) leaves are darker -> natural depth.
 Px genLeaves(float u, float v) {
     Px out = gray(1.0f, 0.0f);
     Rng rng(4242);
-    float bestDepth = -1;
-    for (int i = 0; i < 46; ++i) {
-        float cx = rng.range(0.12f, 0.88f), cy = rng.range(0.12f, 0.88f);
-        float ang = rng.range(0, 2 * PI), len = rng.range(0.10f, 0.17f), wid = len * rng.range(0.35f, 0.5f);
-        float tone = rng.range(0.70f, 1.30f);
+    const int count = 120;
+    for (int i = 0; i < count; ++i) {
+        // place leaves inside a circle, denser near the middle
+        float ang = rng.range(0, 2 * PI), rad = 0.43f * std::sqrt(rng.uniform());
+        float cx = 0.5f + std::cos(ang) * rad, cy = 0.5f + std::sin(ang) * rad;
+        float dir = rng.range(0, 2 * PI), len = rng.range(0.055f, 0.09f), wid = len * rng.range(0.30f, 0.42f);
+        float hue = rng.range(-1.0f, 1.0f);
+        float depth = (float)i / count;   // 0 = deep inside the cluster, 1 = outer leaves
         float dx = u - cx, dy = v - cy;
-        float lx = dx * std::cos(ang) + dy * std::sin(ang);
-        float ly = -dx * std::sin(ang) + dy * std::cos(ang);
-        float e = (lx * lx) / (len * len) + (ly * ly) / (wid * wid);
-        if (e < 1.0f && (float)i > bestDepth) {
-            bestDepth = (float)i;
-            float rib = std::fabs(ly) < wid * 0.08f ? 1.25f : 1.0f;
-            float shade = tone * (0.85f + 0.3f * (1.0f - e)) * rib;
-            out = detail(shade * 0.92f, shade * 1.05f, shade * 0.85f, 1.0f);
-        }
+        float lx = dx * std::cos(dir) + dy * std::sin(dir);
+        float ly = -dx * std::sin(dir) + dy * std::cos(dir);
+        float t = lx / len;                       // -1 (stem end) .. 1 (tip)
+        if (t < -1.0f || t > 1.0f) continue;
+        float halfW = wid * std::sqrt(std::max(0.0f, 1.0f - t * t)) * (1.0f - 0.25f * t);   // pointed tip
+        if (std::fabs(ly) > halfW) continue;
+        float rib = std::fabs(ly) < wid * 0.07f ? 0.82f : 1.0f;              // midrib
+        float edge = 1.0f - 0.25f * (std::fabs(ly) / std::max(halfW, 1e-4f));
+        float shade = (0.55f + 0.6f * depth) * (0.85f + 0.25f * (t * 0.5f + 0.5f)) * rib * edge;
+        out = detail(shade * (0.95f + 0.12f * hue), shade * (1.05f + 0.05f * hue), shade * (0.80f - 0.1f * hue), 1.0f);
     }
-    // fade edges of the card so the square is never visible
-    float edge = std::min(std::min(u, 1 - u), std::min(v, 1 - v));
-    if (edge < 0.04f) out.a = 0.0f;
     return out;
 }
 

@@ -66,9 +66,9 @@ def crop_center(img, frac=0.62):
 
 
 OBJECTS = ["vending", "atm", "coffee", "tv", "sofa", "armchair", "bookshelf", "human", "human_walk", "human_sit",
-           "sedan", "suv", "hatchback", "tree", "palm", "bamboo", "banana", "streetlamp", "pendant", "aquarium",
+           "car_red", "car_blue", "car_white", "tree", "palm", "bamboo", "banana", "streetlamp", "pendant", "aquarium",
            "products", "shapes", "tableset", "clock", "undergrowth"]
-WIDE = {"sedan", "suv", "hatchback", "products", "shapes", "sofa", "tableset", "undergrowth", "aquarium"}
+WIDE = {"car_red", "car_blue", "car_white", "products", "shapes", "sofa", "tableset", "undergrowth", "aquarium"}
 for o in OBJECTS:
     p = os.path.join(SHOTS, "obj_" + o + ".png")
     if not os.path.exists(p):
@@ -78,7 +78,7 @@ for o in OBJECTS:
     save_jpg(img, "obj_" + o, width=900)
 
 # build-stage strips: 12% -> 35% -> 65% -> 100% of the parts
-STAGED = ["vending", "atm", "human", "sedan", "tree", "palm", "sofa", "streetlamp"]
+STAGED = ["vending", "atm", "human", "car_red", "tree", "palm", "sofa", "streetlamp"]
 labels = ["12% of parts", "35% of parts", "65% of parts", "complete"]
 for o in STAGED:
     names = ["stage_%s_%d" % (o, k) for k in (1, 2, 3)] + ["obj_" + o]
@@ -124,9 +124,9 @@ def tex_escape(s):
 
 
 NICE = {"vending": "Vending machine", "atm": "ATM", "coffee": "Coffee machine", "tv": "Television (frame)",
-        "sofa": "Sofa (3 seats)", "armchair": "Armchair", "bookshelf": "Bookshelf", "human": "Person (standing)",
-        "human_walk": "Person (walking)", "human_sit": "Person + chair", "sedan": "Sedan car + driver",
-        "suv": "SUV + driver", "hatchback": "Hatchback + driver", "tree": "Rainforest tree", "palm": "Coconut palm",
+        "sofa": "Sofa (3 seats)", "armchair": "Armchair", "bookshelf": "Bookshelf", "human": "Woman (standing)",
+        "human_walk": "Man (walking)", "human_sit": "Person + chair", "car_red": "Car + driver (any colour)",
+        "car_blue": "Car (blue) + driver", "car_white": "Car (white) + driver", "tree": "Rainforest tree", "palm": "Coconut palm",
         "bamboo": "Bamboo clump", "banana": "Banana plant", "streetlamp": "Street lamp", "pendant": "Pendant lamp",
         "aquarium": "Aquarium", "products": "6 products", "shapes": "Shape gallery", "tableset": "Table set",
         "clock": "Wall clock", "undergrowth": "Bush+fern+rock+log"}
@@ -143,7 +143,7 @@ with open(os.path.join(GEN, "parts_table.tex"), "w") as out:
     out.write("\\begin{tabular}{l r " + "r" * len(used) + "}\n\\toprule\n")
     out.write("Object & Total & " + " & ".join(short[mesh_cols[i]] for i in used) + " \\\\\n\\midrule\n")
     for r in data:
-        if r[0] in ("shapes",):
+        if r[0] in ("shapes", "car_blue", "car_white"):   # the 3 car colours have identical parts
             continue
         cells = [str(int(r[2 + i])) if int(r[2 + i]) else "--" for i in used]
         out.write(tex_escape(NICE.get(r[0], r[0])) + " & \\textbf{" + r[1] + "} & " + " & ".join(cells) + " \\\\\n")

@@ -14,10 +14,12 @@
 #include "../game/Inventory.h"
 #include "../game/Messages.h"
 #include "../gfx/Screenshot.h"
+#include "../gfx/Profiler.h"
 #include "../scene/Furniture.h"
 #include "../scene/Layout.h"
 #include "../scene/Lights.h"
 #include "../scene/Materials.h"
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -30,7 +32,7 @@ enum StudioObject {
     SO_PRODUCTS, SO_SHAPES, SO_TABLESET, SO_CLOCK, SO_UNDERGROWTH, SO_COUNT
 };
 const char* SO_NAMES[SO_COUNT] = {"vending", "atm", "coffee", "tv", "sofa", "armchair", "bookshelf", "human", "human_walk", "human_sit",
-                                  "sedan", "suv", "hatchback", "tree", "palm", "bamboo", "banana", "streetlamp", "pendant", "aquarium",
+                                  "car_red", "car_blue", "car_white", "tree", "palm", "bamboo", "banana", "streetlamp", "pendant", "aquarium",
                                   "products", "shapes", "tableset", "clock", "undergrowth"};
 
 // machines used only for studio renders (kept here so the text pass can reach them)
@@ -94,25 +96,23 @@ void App::studioObject(DrawSink& s, int o, float time) {
         case SO_SOFA: Furniture::sofa(n, 3, Vec3(0.28f, 0.36f, 0.48f)); break;
         case SO_ARMCHAIR: Furniture::armchair(n, Vec3(0.55f, 0.30f, 0.22f)); break;
         case SO_BOOKSHELF: Furniture::bookshelf(n, 1.8f, 2.3f); break;
-        case SO_HUMAN: Human::draw(n, Human::randomLook(3), Human::idle(0.0f), HELD_CUP); break;
-        case SO_HUMAN_WALK: Human::draw(n, Human::randomLook(11), Human::walk(1.2f, 1.0f), HELD_NONE); break;
+        case SO_HUMAN: Human::draw(n, Human::look(1), Human::idle(0.0f), HELD_CUP); break;
+        case SO_HUMAN_WALK: Human::draw(n, Human::look(0), Human::walk(1.2f, 1.0f), HELD_NONE); break;
         case SO_HUMAN_SIT: {
             Furniture::chair(n.at({0, 0, -0.05f}), Vec3(0.45f, 0.2f, 0.15f));
-            Human::draw(n, Human::randomLook(5), Human::sit(0.0f), HELD_PHONE);
+            Human::draw(n, Human::look(0), Human::sit(0.0f), HELD_PHONE);
             break;
         }
         case SO_SEDAN: case SO_SUV: case SO_HATCH: {
-            CarLook l;
-            l.type = o - SO_SEDAN;
-            l.paint = o == SO_SEDAN ? Vec3(0.75f, 0.06f, 0.08f) : (o == SO_SUV ? Vec3(0.10f, 0.22f, 0.55f) : Vec3(0.92f, 0.92f, 0.92f));
+            CarLook l = Car::randomLook((unsigned)(o - SO_SEDAN));   // red, blue, white
             CarState st;
             st.doorAngle = 55.0f;
             st.steer = 18.0f;
             st.headlights = true;
             st.time = time;
             Car::draw(n, l, st);
-            CarDims d = Car::dims(l.type);
-            Human::draw(n.at(d.driverSeat), Human::randomLook(8), Human::drive(0.0f), HELD_NONE);
+            CarDims d = Car::dims();
+            Human::draw(n.at(d.driverSeat), Human::look(0), Human::drive(0.0f), HELD_NONE);
             break;
         }
         case SO_TREE: Nature::rainforestTree(n, 1.0f, rng); break;
@@ -254,6 +254,113 @@ void App::runShots(const std::string& dir) {
         m_player.fov = fov;
     };
     auto hour = [&](float hr) { m_day.hour = hr; m_day.paused = true; };
+
+    // ---- quick debug renders (set JRS_DEBUG=1): close-ups + vending benchmark only ----
+    if (std::getenv("JRS_DEBUG")) {
+        std::ofstream bf(dir + "/debug_bench.csv");
+        auto benchHere = [&](const char* label) {
+            for (int pass = 0; pass < 2; ++pass) {
+                m_renderer.settings.enhanced = pass == 0;
+                for (int i = 0; i < 5; ++i) { update(1.0f / 60); render(w, h, true); glfwSwapBuffers(m_win); }
+                glFinish();
+                double t0 = glfwGetTime();
+                for (int i = 0; i < 40; ++i) { update(1.0f / 60); render(w, h, true); glfwSwapBuffers(m_win); glfwPollEvents(); }
+                glFinish();
+                double ms = (glfwGetTime() - t0) * 1000.0 / 40;
+                bf << label << "," << (pass ? "basic" : "enhanced") << "," << ms << "," << m_renderer.statDrawCalls << ","
+                   << m_renderer.statInstances << "," << m_renderer.statTriangles << std::endl;
+            }
+            m_renderer.settings.enhanced = true;
+        };
+        auto cam = [&](const Vec3& pos, const Vec3& target, float fov) {
+            m_player.mode = CAM_FREE;
+            m_player.freePos = pos;
+            Vec3 d = normalize(target - pos);
+            m_player.freeYaw = toDegrees(std::atan2(d.x, d.z));
+            m_player.freePitch = toDegrees(std::asin(d.y));
+            m_player.fov = fov;
+        };
+        m_day.hour = 11.0f;
+        if (std::getenv("JRS_NOLIGHTS")) for (int g = 0; g < LG_COUNT; ++g) LightManager::get().groupOn[g] = false;
+        m_day.paused = true;
+        m_player.mode = CAM_FIRST;
+        m_player.pos = m_vend[1].standPos();
+        m_player.yaw = 180.0f;
+        m_player.pitch = -8.0f;
+        m_player.fov = 70;
+        benchHere("vending_close");
+        save("dbg_vending_close");
+        {
+            Profiler& pr = Profiler::get();
+            std::ofstream pf(dir + "/debug_profile.txt");
+            auto prof = [&](const char* label) {
+                pr.enabled = true;
+                pr.reset();
+                double upd = 0;
+                for (int i = 0; i < 30; ++i) {
+                    auto t0 = std::chrono::high_resolution_clock::now();
+                    update(1.0f / 60);
+                    upd += std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t0).count();
+                    render(w, h, true);
+                    glfwSwapBuffers(m_win);
+                }
+                pr.enabled = false;
+                pf << "== " << label << "  (update cpu " << upd / 30 << " ms)" << std::endl;
+                for (auto& kv : pr.gpu) pf << "  " << kv.first << "  gpu " << kv.second / pr.frames << "  cpu " << pr.cpu[kv.first] / pr.frames << std::endl;
+            };
+            prof("vending_close");
+            m_player.pos = Vec3(0, 0, 4.3f);
+            m_player.yaw = 180.0f;
+            prof("lounge");
+            m_player.pos = m_vend[1].standPos();
+        }
+        m_player.pos = Vec3(0, 0, 4.3f);
+        benchHere("lounge");
+        // studio close-ups
+        const Vec3 hv[3] = {Vec3(0, 1.2f, 2.2f), Vec3(2.2f, 1.2f, 0.0f), Vec3(-1.2f, 1.6f, -1.8f)};
+        const char* hn[3] = {"front", "side", "back"};
+        for (int k = 0; k < 3; ++k) {
+            renderStudio(w, h, hv[k], Vec3(0, 0.95f, 0), 40, 1 << 30, SO_HUMAN, 1.0f);
+            save(std::string("dbg_human_") + hn[k]);
+        }
+        renderStudio(w, h, Vec3(0, 1.0f, 2.0f), Vec3(0, 0.6f, 0), 40, 1 << 30, SO_HUMAN_SIT, 1.0f);
+        save("dbg_human_sit");
+        renderStudio(w, h, Vec3(-3.6f, 1.7f, 1.2f), Vec3(-0.6f, 0.8f, 0.2f), 40, 1 << 30, SO_SEDAN, 1.0f);
+        save("dbg_car_door");
+        renderStudio(w, h, Vec3(-2.6f, 2.2f, -2.0f), Vec3(0, 0.9f, 0), 45, 1 << 30, SO_SEDAN, 1.0f);
+        save("dbg_car_rear");
+        renderStudio(w, h, Vec3(6.0f, 6.5f, 9.0f), Vec3(0, 6.0f, 0), 50, 1 << 30, SO_TREE, 1.0f);
+        save("dbg_tree");
+        renderStudio(w, h, Vec3(2.6f, 1.6f, 3.4f), Vec3(0, 0.6f, 0), 45, 1 << 30, SO_UNDERGROWTH, 1.0f);
+        save("dbg_bush");
+        renderStudio(w, h, Vec3(0.5f, 1.4f, 1.6f), Vec3(0, 1.1f, 0), 45, 1 << 30, SO_BOOKSHELF, 1.0f);
+        save("dbg_books");
+        renderStudio(w, h, Vec3(0.25f, 0.55f, 0.6f), Vec3(0, 0.45f, 0), 40, 1 << 30, SO_COFFEE, 1.0f);
+        save("dbg_coffee");
+        renderStudio(w, h, Vec3(0.5f, 1.5f, 1.6f), Vec3(0, 1.3f, 0), 40, 1 << 30, SO_VENDING, 1.0f);
+        save("dbg_vending_studio");
+        m_player.mode = CAM_FIRST;
+        m_player.pos = Vec3(-20.0f, 0, 26.5f);
+        m_player.yaw = 150.0f; m_player.pitch = 8.0f;
+        frame(false, 3); save("dbg_jungle_edge");
+        cam(Vec3(-34.0f, 2.0f, -26.0f), Vec3(-40.0f, 3.0f, -34.0f), 70);
+        frame(false, 3); save("dbg_jungle_close");
+        // doorways (the views from the bug report)
+        m_player.mode = CAM_FIRST;
+        m_player.pos = Vec3(-5.6f, 0, -2.2f); m_player.yaw = -95.0f; m_player.pitch = 4.0f;
+        frame(true, 3); save("dbg_atm_door");
+        m_player.pos = Vec3(0.3f, 0, 7.2f); m_player.yaw = 180.0f; m_player.pitch = -14.0f;
+        frame(true, 30); save("dbg_entrance");
+        for (int k = 0; k < 3; ++k) {
+            renderStudio(w, h, Vec3(-4.2f, 2.2f, 4.8f), Vec3(0, 0.7f, 0), 40, 1 << 30, SO_SEDAN + k, 1.0f);
+            save("dbg_car_" + std::to_string(k));
+        }
+        renderStudio(w, h, Vec3(2.4f, 1.5f, 0.9f), Vec3(0, 1.1f, 0.2f), 50, 1 << 30, SO_SEDAN + 2, 1.0f);
+        save("dbg_car_glass_side");
+        renderStudio(w, h, Vec3(1.8f, 1.9f, 4.2f), Vec3(0, 1.0f, 0.3f), 45, 1 << 30, SO_SEDAN + 2, 1.0f);
+        save("dbg_car_glass_front");
+        return;
+    }
 
     // ---- part statistics for the report ----
     {

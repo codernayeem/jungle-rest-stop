@@ -122,6 +122,7 @@ void bookshelf(const Node& n, float w, float h) {
     int shelves = 5;
     float sh = (h - 0.12f) / shelves;
     Material books = Material(Vec3(0.95f), 0.12f, 16.0f).tx(TEX_BOOKS).fl(MF_MESH_UV);
+    Material pages = Material(Vec3(0.86f, 0.82f, 0.72f), 0.05f, 8.0f);   // top / sides of a row of books
     for (int i = 0; i < shelves; ++i) {
         float y = 0.10f + i * sh;
         n.box({0, y, 0}, {w - 0.06f, 0.025f, d - 0.02f}, wd);
@@ -129,9 +130,13 @@ void bookshelf(const Node& n, float w, float h) {
         float bh = sh * 0.78f;
         float split = 0.35f + 0.1f * (i % 3);
         float w1 = (w - 0.1f) * split, w2 = (w - 0.1f) - w1 - 0.04f;
-        n.box({-w / 2 + 0.05f + w1 / 2, y + 0.0125f + bh / 2, 0.02f}, {w1, bh, 0.24f}, books, {0, (i % 2) ? 180.0f : 0.0f, 0});
-        n.box({w / 2 - 0.05f - w2 / 2, y + 0.0125f + bh * 0.46f, 0.02f}, {w2, bh * 0.92f, 0.24f}, books, {0, (i % 2) ? 0.0f : 180.0f, 0});
-        if (i == 2) n.box({-w / 2 + 0.07f + w1, y + 0.0125f + 0.08f, 0.02f}, {0.04f, 0.16f, 0.24f}, Mat::matte(Vec3(0.6f, 0.1f, 0.1f)), {0, 0, -18});
+        // block of books = plain box (pages colour) + textured quad on the front (the spines)
+        float x1 = -w / 2 + 0.05f + w1 / 2, x2 = w / 2 - 0.05f - w2 / 2;
+        n.box({x1, y + 0.0125f + bh / 2, 0.02f}, {w1, bh, 0.24f}, pages);
+        n.part(M_QUAD, {x1, y + 0.0125f + bh / 2, 0.141f}, {w1, bh, 1}, books, {0, 0, 0});
+        n.box({x2, y + 0.0125f + bh * 0.46f, 0.02f}, {w2, bh * 0.92f, 0.24f}, pages);
+        n.part(M_QUAD, {x2, y + 0.0125f + bh * 0.46f, 0.141f}, {(i % 2) ? -w2 : w2, bh * 0.92f, 1}, books);   // mirrored on odd shelves
+        if (i == 2) n.box({-w / 2 + 0.085f + w1, y + 0.0125f + 0.085f, 0.02f}, {0.035f, 0.16f, 0.22f}, Mat::matte(Vec3(0.6f, 0.1f, 0.1f)), {0, 0, -12});
     }
 }
 

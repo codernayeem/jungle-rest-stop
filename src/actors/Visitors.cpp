@@ -189,7 +189,7 @@ void VisitorSystem::buildDriveOut(Visitor& v) {
 }
 
 Vec3 VisitorSystem::carDoorPoint(const Visitor& v) const {
-    CarDims d = Car::dims(v.carLook.type);
+    CarDims d = Car::dims();
     Vec3 p = carMatrix(v).transformPoint(Vec3(-d.width * 0.5f - 0.55f, 0, d.driverSeat.z + 0.1f));
     p.y = 0;
     return p;
@@ -306,7 +306,7 @@ void VisitorSystem::updateCar(Visitor& v, float dt, const Vec3& player) {
     Vec3 p = v.carPath.at(v.carS, &tan);
     float newYaw = yawTowards(v.carReverse ? -tan : tan);
     float yawRate = toDegrees(wrapAngle(toRadians(newYaw - v.carYaw)));
-    CarDims d = Car::dims(v.carLook.type);
+    CarDims d = Car::dims();
     float steerTarget = ds > 1e-4f ? clampf(toDegrees(std::atan(d.wheelBase * toRadians(yawRate) / ds)) * (v.carReverse ? -1.0f : 1.0f), -35.0f, 35.0f) : v.car.steer;
     v.car.steer = approach(v.car.steer, steerTarget, dt * 90.0f);
     v.carYaw = newYaw;
@@ -493,7 +493,7 @@ void VisitorSystem::doActivity(Visitor& v, float dt) {
 void VisitorSystem::updatePerson(Visitor& v, float dt, const Vec3& player) {
     (void)player;
     v.poseT += dt;
-    CarDims d = Car::dims(v.carLook.type);
+    CarDims d = Car::dims();
     Mat4 cm = carMatrix(v);
     Vec3 seatW = cm.transformPoint(d.driverSeat);
     switch (v.state) {
@@ -626,7 +626,7 @@ void VisitorSystem::update(float dt, float time, const Vec3& player, float night
         }
         // car + person colliders for the player
         if (v.active) {
-            CarDims d = Car::dims(v.carLook.type);
+            CarDims d = Car::dims();
             Vec3 c = carMatrix(v).transformPoint(Vec3(0, 0, 0));
             col.addOriented(c, d.width * 0.5f, d.length * 0.5f, v.carYaw, 0.0f, d.height, true);
             if (!v.inCar) col.addCircle(v.pos.x, v.pos.z, 0.22f, true);
@@ -681,7 +681,7 @@ void VisitorSystem::draw(DrawSink& dyn, const Vec3& cam, float time) const {
         HumanPose pose = Human::blend(poseOf(v.prevPose), poseOf(v.pose), clampf(v.poseT / POSE_BLEND_TIME, 0.0f, 1.0f));
         if (v.inCar) {
             if ((v.carPos - cam).length() < 60.0f) {
-                CarDims d = Car::dims(v.carLook.type);
+                CarDims d = Car::dims();
                 Human::draw(Node(dyn, cm).at(d.driverSeat), v.look, Human::drive(time), HELD_NONE);
             }
         } else if ((v.pos - cam).length() < 70.0f) {
@@ -694,7 +694,7 @@ void VisitorSystem::addLights(float night) const {
     if (night < 0.3f) return;
     for (const auto& v : m_vis) {
         if (!v.active || !v.car.headlights) continue;
-        CarDims d = Car::dims(v.carLook.type);
+        CarDims d = Car::dims();
         Mat4 cm = carMatrix(v);
         LightDef l;
         l.kind = LIGHT_SPOT;

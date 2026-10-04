@@ -1,7 +1,7 @@
 // =============================================================================
-//  Car.h  -  Cars built from basic shapes (sedan, SUV, hatchback).
-//    body       = lower box + wedge bonnet + tapered-box cabin
-//    windows    = transparent boxes (you can see the driver)
+//  Car.h  -  One car model (a sedan, in red, blue or white) built from basic shapes.
+//    body       = front + rear boxes, open under the driver door, wedge bonnet
+//    windows    = 6 transparent glass panes (you can see the driver)
 //    wheels     = tyre cylinder + rim cylinder + hub (spin + front steering)
 //    lights     = emissive head / tail lights (+ real spot lights at night)
 //    driver door= hinged child node (opens for the NPC)
@@ -11,8 +11,7 @@
 #include "../gfx/Draw.h"
 
 struct CarLook {
-    Vec3 paint = Vec3(0.7f, 0.1f, 0.1f);
-    int type = 0;   // 0 sedan, 1 SUV, 2 hatchback
+    Vec3 paint = Vec3(0.7f, 0.1f, 0.1f);   // one car model (sedan) in 3 colours
 };
 
 struct CarState {
@@ -33,7 +32,7 @@ struct CarDims {
 };
 
 namespace Car {
-CarDims dims(int type);
+CarDims dims();
 CarLook randomLook(unsigned seed);
 void draw(const Node& root, const CarLook& look, const CarState& st);
 }  // namespace Car

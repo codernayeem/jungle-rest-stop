@@ -1,5 +1,6 @@
 #include "Renderer.h"
 #include "Screenshot.h"
+#include "Profiler.h"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -38,6 +39,7 @@ out vec2 vUV;
 flat out vec4 vColor;
 flat out vec4 vEmit;
 flat out vec4 vParams;
+invariant gl_Position;
 
 void main() {
     mat4 M = mat4(iM0, iM1, iM2, iM3);
@@ -145,7 +147,10 @@ void main() {
         }
         tex = texture(uTex, vec3(uv, float(layer)));
     }
-    if ((flags & 16) != 0 && tex.a < 0.5) discard;   // cut-out (leaves, grass)
+    if ((flags & 16) != 0) {   // cut-out (leaves, grass); same rule as the depth pre-pass
+        float cut = 0.5 - 0.22 * clamp(distance(vWorldPos, uCamPos) * (1.0 / 60.0), 0.0, 1.0);
+        if (tex.a < cut) discard;
+    }
 
     vec3 albedo = vColor.rgb;
     if ((flags & 32) != 0) {
@@ -187,6 +192,13 @@ void main() {
         vec3 H = normalize(uLightDir + V);
         float sp = ndl > 0.0 ? pow(max(dot(N, H), 0.0), shin) * specS : 0.0;
         result += (albedo * diff + vec3(sp)) * uLightColor * sh;
+        if (foliage) {
+            // light shining through thin leaves when looking towards the sun
+            float through = pow(max(dot(-V, uLightDir), 0.0), 3.0);
+            result += albedo * vec3(0.9, 1.0, 0.55) * uLightColor * sh * through * 0.45;
+            // cards are darker near their base (leaves shade each other)
+            if ((flags & 1) != 0) result *= mix(0.72, 1.08, clamp(vUV.y, 0.0, 1.0));
+        }
 
         // which region is this pixel in? (each room only sees its own lamps)
         int region = 3;
@@ -249,8 +261,10 @@ uniform mat4 uLightVP;
 uniform float uTime;
 uniform int uWind;
 out vec2 vUV;
+out vec3 vWorld;
 flat out float vLayer;
 flat out float vFlags;
+invariant gl_Position;
 void main() {
     mat4 M = mat4(iM0, iM1, iM2, iM3);
     vec4 wp = M * vec4(aPos, 1.0);
@@ -263,6 +277,7 @@ void main() {
         wp.z += cos(ph * 0.83) * amp * 0.7;
     }
     vUV = aUV;
+    vWorld = wp.xyz;
     vLayer = iEmit.w;
     vFlags = iParams.w;
     gl_Position = uLightVP * wp;
@@ -272,13 +287,18 @@ void main() {
 const char* DEPTH_FS = R"GLSL(
 #version 330 core
 in vec2 vUV;
+in vec3 vWorld;
 flat in float vLayer;
 flat in float vFlags;
 uniform sampler2DArray uTex;
+uniform vec3 uCutCam;
+uniform float uCutFade;    // 0 in the shadow pass
 void main() {
     int flags = int(vFlags + 0.5);
     if ((flags & 16) != 0) {
-        if (texture(uTex, vec3(vUV, vLayer)).a < 0.5) discard;
+        // far away the mip-maps blur the alpha, so lower the threshold: leaves stay full
+        float cut = 0.5 - 0.22 * clamp(distance(vWorld, uCutCam) * uCutFade, 0.0, 1.0);
+        if (texture(uTex, vec3(vUV, vLayer)).a < cut) discard;
     }
 }
 )GLSL";
@@ -346,6 +366,19 @@ void main() {
 }
 )GLSL";
 
+const char* PROXY_VS = R"GLSL(
+#version 330 core
+layout(location=0) in vec3 aPos;
+uniform mat4 uViewProj;
+uniform vec3 uMin, uMax;
+void main() { gl_Position = uViewProj * vec4(mix(uMin, uMax, aPos + 0.5), 1.0); }
+)GLSL";
+const char* PROXY_FS = R"GLSL(
+#version 330 core
+out vec4 FragColor;
+void main() { FragColor = vec4(1.0); }
+)GLSL";
+
 const GLsizei INSTANCE_STRIDE = sizeof(float) * 37;
 const float CHUNK_SIZE = 32.0f;
 const float LOD_DIST[3] = {1e9f, 85.0f, 45.0f};
@@ -409,7 +442,15 @@ bool Renderer::init(float (*heightFn)(float, float)) {
     bool ok = m_main.build(MAIN_VS, MAIN_FS, "main");
     ok &= m_depth.build(DEPTH_VS, DEPTH_FS, "depth");
     ok &= m_sky.build(SKY_VS, SKY_FS, "sky");
+    ok &= m_proxy.build(PROXY_VS, PROXY_FS, "proxy");
     glGenVertexArrays(1, &m_skyVao);
+    glGenVertexArrays(1, &m_proxyVao);
+    glBindVertexArray(m_proxyVao);
+    glBindBuffer(GL_ARRAY_BUFFER, m_meshes[M_CUBE].vbo);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_meshes[M_CUBE].ebo);
+    glBindVertexArray(0);
 
     m_staticSink.r = this;
     m_dynSink.r = this;
@@ -431,6 +472,7 @@ void Renderer::clearStatic() {
     for (auto& c : m_chunks) {
         for (auto& b : c.batches) glDeleteVertexArrays(1, &b.vao);
         glDeleteBuffers(1, &c.vbo);
+        if (c.query) glDeleteQueries(1, &c.query);
     }
     m_chunks.clear();
     m_pending.clear();
@@ -491,6 +533,8 @@ void Renderer::finalizeStatic() {
     }
     for (auto& kv : cells) {
         Chunk ch;
+        ch.global = kv.first == GLOBAL;
+        glGenQueries(1, &ch.query);
         ch.mn = Vec3(1e9f);
         ch.mx = Vec3(-1e9f);
         std::map<int, std::vector<InstanceData>> groups;
@@ -608,19 +652,94 @@ void Renderer::setMainUniforms(const FrameInfo& f) {
 }
 
 void Renderer::drawChunks(bool shadowPass, const Frustum& fr, const Vec3& cam) {
-    for (auto& ch : m_chunks) {
+    // 1) frustum + distance test, 2) sort front-to-back (nearer chunks fill the
+    // depth buffer first, so hidden pixels behind them are rejected early),
+    // 3) skip chunks that the GPU reported as fully hidden last frame.
+    m_visibleChunks.clear();
+    std::vector<float> dist(m_chunks.size(), 0.0f);
+    for (size_t i = 0; i < m_chunks.size(); ++i) {
+        Chunk& ch = m_chunks[i];
         if (!fr.boxVisible(ch.mn, ch.mx)) continue;
-        // distance from camera to chunk box (XZ)
         float dx = std::max(std::max(ch.mn.x - cam.x, 0.0f), cam.x - ch.mx.x);
         float dz = std::max(std::max(ch.mn.z - cam.z, 0.0f), cam.z - ch.mx.z);
-        float dist = std::sqrt(dx * dx + dz * dz);
-        if (!shadowPass) {
-            if (dist > m_frame.farDist) continue;
-            statChunksVisible++;
-        }
+        dist[i] = std::sqrt(dx * dx + dz * dz);
+        if (!shadowPass && dist[i] > m_frame.farDist) continue;
+        m_visibleChunks.push_back((int)i);
+    }
+    std::sort(m_visibleChunks.begin(), m_visibleChunks.end(), [&](int a, int b) { return dist[a] < dist[b]; });
+
+    auto drawBatches = [&](Chunk& ch, float d) {
         for (auto& b : ch.batches) {
             if (shadowPass && (!b.cast || b.lod == 2)) continue;
-            if (dist > LOD_DIST[b.lod]) continue;
+            if (d > LOD_DIST[b.lod]) continue;
+            glBindVertexArray(b.vao);
+            glDrawElementsInstanced(GL_TRIANGLES, m_meshes[b.mesh].indexCount, GL_UNSIGNED_INT, nullptr, b.count);
+            statDrawCalls++;
+            statInstances += b.count;
+            statTriangles += (long long)b.count * m_meshes[b.mesh].indexCount / 3;
+        }
+    };
+    if (shadowPass) {
+        for (int i : m_visibleChunks) drawBatches(m_chunks[i], dist[i]);
+        return;
+    }
+
+    m_occludedChunks.clear();
+    m_drawList.clear();
+    m_drawDist.clear();
+    bool useQueries = settings.occlusion && m_frame.drawStatic;
+    for (int i : m_visibleChunks) {
+        Chunk& ch = m_chunks[i];
+        statChunksVisible++;
+        if (ch.pending) {   // read last frame's answer without waiting for the GPU
+            GLuint ready = 0;
+            glGetQueryObjectuiv(ch.query, GL_QUERY_RESULT_AVAILABLE, &ready);
+            if (ready) {
+                GLuint any = 1;
+                glGetQueryObjectuiv(ch.query, GL_QUERY_RESULT, &any);
+                ch.occluded = any == 0;
+                ch.pending = false;
+            }
+        }
+        bool inside = cam.x > ch.mn.x - 2 && cam.x < ch.mx.x + 2 && cam.z > ch.mn.z - 2 && cam.z < ch.mx.z + 2;
+        if (!useQueries || inside || ch.global) ch.occluded = false;
+        if (ch.occluded) { m_occludedChunks.push_back(i); continue; }
+        bool ask = useQueries && !inside && !ch.global && !ch.pending;
+        if (ask) glBeginQuery(GL_ANY_SAMPLES_PASSED, ch.query);
+        drawBatches(ch, dist[i]);
+        m_drawList.push_back(i);
+        m_drawDist.push_back(dist[i]);
+        if (ask) { glEndQuery(GL_ANY_SAMPLES_PASSED); ch.pending = true; }
+    }
+    statChunksOccluded = (int)m_occludedChunks.size();
+    if (m_occludedChunks.empty()) return;
+    // hidden chunks: draw only their bounding box (no colour, no depth) to ask
+    // the GPU whether they became visible again
+    m_proxy.use();
+    m_proxy.set("uViewProj", m_viewProj);
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glDepthMask(GL_FALSE);
+    glBindVertexArray(m_proxyVao);
+    for (int i : m_occludedChunks) {
+        Chunk& ch = m_chunks[i];
+        if (ch.pending) continue;
+        m_proxy.set("uMin", ch.mn);
+        m_proxy.set("uMax", ch.mx);
+        glBeginQuery(GL_ANY_SAMPLES_PASSED, ch.query);
+        glDrawElements(GL_TRIANGLES, m_meshes[M_CUBE].indexCount, GL_UNSIGNED_INT, nullptr);
+        glEndQuery(GL_ANY_SAMPLES_PASSED);
+        ch.pending = true;
+    }
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);   // still inside the depth pre-pass
+    glDepthMask(GL_TRUE);
+    m_depth.use();
+}
+
+void Renderer::drawChunkList() {
+    for (size_t k = 0; k < m_drawList.size(); ++k) {
+        Chunk& ch = m_chunks[m_drawList[k]];
+        for (auto& b : ch.batches) {
+            if (m_drawDist[k] > LOD_DIST[b.lod]) continue;
             glBindVertexArray(b.vao);
             glDrawElementsInstanced(GL_TRIANGLES, m_meshes[b.mesh].indexCount, GL_UNSIGNED_INT, nullptr, b.count);
             statDrawCalls++;
@@ -688,6 +807,8 @@ void Renderer::renderShadowMap(const FrameInfo& f) {
     m_depth.set("uTime", f.time);
     m_depth.set("uWind", settings.wind ? 1 : 0);
     m_depth.set("uTex", 0);
+    m_depth.set("uCutCam", f.camPos);
+    m_depth.set("uCutFade", 0.0f);
     Frustum lf;
     lf.fromMatrix(m_lightVP);
     if (f.drawStatic) drawChunks(true, lf, c);
@@ -738,12 +859,14 @@ void Renderer::beginFrame(const FrameInfo& f, int width, int height) {
         glBufferSubData(GL_ARRAY_BUFFER, 0, bytes, m_dyn[i].data());
     }
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+    Profiler::get().mark("upload");
 
     m_textures.bind(0);
 
     // ---- shadow pass ----
     m_shadowValid = false;
     if (settings.enhanced && settings.shadows && f.env.castShadows) renderShadowMap(f);
+    Profiler::get().mark("shadow");
 
     // ---- main pass ----
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -752,19 +875,44 @@ void Renderer::beginFrame(const FrameInfo& f, int width, int height) {
     glClearColor(cc.x, cc.y, cc.z, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     if (f.drawSky) renderSky(f);
+    Profiler::get().mark("sky");
 
+    // ---- depth pre-pass: only depth, very cheap shader. Afterwards every pixel
+    //      is lit exactly once (no work wasted on surfaces that get covered) ----
+    Frustum fr;
+    fr.fromMatrix(m_viewProj);
+    m_textures.bind(0);
+    m_depth.use();
+    m_depth.set("uLightVP", m_viewProj);
+    m_depth.set("uTime", f.time);
+    m_depth.set("uWind", (settings.enhanced && settings.wind) ? 1 : 0);
+    m_depth.set("uTex", 0);
+    m_depth.set("uCutCam", f.camPos);
+    m_depth.set("uCutFade", 1.0f / 60.0f);
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    m_drawList.clear();
+    m_drawDist.clear();
+    if (f.drawStatic) drawChunks(false, fr, f.camPos);
+    drawDynamicOpaque();
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    Profiler::get().mark("depth_prepass");
+
+    // ---- shading pass ----
     m_main.use();
     m_textures.bind(0);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, m_shadowTex);
     glActiveTexture(GL_TEXTURE0);
     setMainUniforms(f);
-
-    Frustum fr;
-    fr.fromMatrix(m_viewProj);
-    if (f.drawStatic) drawChunks(false, fr, f.camPos);
+    glDepthFunc(GL_LEQUAL);
+    glDepthMask(GL_FALSE);
+    drawChunkList();
+    Profiler::get().mark("static_world");
     drawDynamicOpaque();
+    glDepthMask(GL_TRUE);
+    glDepthFunc(GL_LESS);
     glBindVertexArray(0);
+    Profiler::get().mark("dynamic_opaque");
 }
 
 void Renderer::drawTransparent() {
@@ -806,6 +954,7 @@ void Renderer::drawTransparent() {
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+    Profiler::get().mark("transparent");
 }
 
 bool Renderer::saveShadowMap(const std::string& path) const {

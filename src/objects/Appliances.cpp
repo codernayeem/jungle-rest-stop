@@ -119,7 +119,7 @@ void CoffeeMachine::drawDynamic(DrawSink& dyn) const {
         n.part(M_CYLINDER, {-0.11f + i * 0.11f, 0.497f, 0.205f - m_btnAnim[i] * 0.005f}, {0.04f, 0.012f, 0.04f}, b, {90, 0, 0});
         n.part(M_TORUS, {-0.11f + i * 0.11f, 0.497f, 0.201f}, {0.062f, 0.04f, 0.062f}, Mat::chrome(), {90, 0, 0});
     }
-    n.box({0, 0.575f, 0.202f}, {0.18f, 0.055f, 0.002f}, Mat::glow(Vec3(0.05f, 0.12f, 0.20f), 1.0f));
+    n.box({0, 0.575f, 0.2045f}, {0.18f, 0.055f, 0.002f}, Mat::glow(Vec3(0.05f, 0.12f, 0.20f), 1.0f));
     n.sph({0.17f, 0.59f, 0.202f}, Vec3(0.012f), Mat::glow(m_state == IDLE ? Vec3(0.2f, 1.0f, 0.3f) : Vec3(1.0f, 0.6f, 0.1f), 1.5f));
     if (m_state == IDLE) return;
     // cup (drops in, then fills)
@@ -131,11 +131,15 @@ void CoffeeMachine::drawDynamic(DrawSink& dyn) const {
     cup.part(M_TORUS, {0.05f, 0.05f, 0}, {0.06f, 0.06f, 0.06f}, ceramic, {90, 0, 0});
     float fill = m_state == BREWING ? m_t / 4.5f : (m_state == READY ? 1.0f : 0.0f);
     if (fill > 0.01f) {
-        cup.cyl({0, 0.008f + 0.035f * fill, 0}, {0.068f, 0.07f * fill, 0.068f}, Material(DRINK_COL[m_drink], 0.7f, 96.0f));
-        if (m_drink == 1 && fill > 0.8f) cup.cyl({0, 0.008f + 0.07f * fill, 0}, {0.07f, 0.008f, 0.07f}, Material(Vec3(0.95f, 0.92f, 0.85f)));
+        // only the liquid surface is visible (the cup is opaque): a disc whose radius
+        // follows the cup's taper at the current height
+        float hgt = 0.006f + 0.075f * fill;
+        float rad = (0.0298f + (0.0425f - 0.0298f) * (hgt / 0.09f)) * 2.0f - 0.006f;
+        bool foam = m_drink == 1 && fill > 0.75f;
+        cup.cyl({0, hgt, 0}, {rad, 0.003f, rad}, Material(foam ? Vec3(0.93f, 0.88f, 0.78f) : DRINK_COL[m_drink], 0.7f, 96.0f));
     }
     if (m_state == BREWING) {
-        float top = 0.41f, bottom = cupY + 0.01f + 0.07f * fill;
+        float top = 0.41f, bottom = cupY + 0.006f + 0.075f * fill;
         n.cyl({0, (top + bottom) * 0.5f, 0.09f}, {0.006f, top - bottom, 0.006f}, Material(DRINK_COL[m_drink], 0.8f, 96.0f));
     }
     for (const auto& p : m_steam)
@@ -145,7 +149,7 @@ void CoffeeMachine::drawDynamic(DrawSink& dyn) const {
 
 void CoffeeMachine::drawScreen(TextRenderer& t) const {
     Canvas c;
-    c.model = translate(m_root, Vec3(0, 0.575f, 0.205f));
+    c.model = translate(m_root, Vec3(0, 0.575f, 0.2068f));
     c.w = 0.18f;
     c.h = 0.055f;
     std::string l1, l2;
