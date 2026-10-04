@@ -1,0 +1,18 @@
+# build output
+build/
+*.o
+main.exe
+# generated screenshots / test renders
+screenshots/
+shots_*/
+# LaTeX temporary files
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.lof
+report/*.lot
+report/*.fls
+report/*.fdb_latexmk
+report/*.synctex.gz
+report/shots/

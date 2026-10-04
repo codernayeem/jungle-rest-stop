@@ -1,0 +1,225 @@
+#include "Human.h"
+#include "../scene/Materials.h"
+#include <cmath>
+
+namespace Human {
+
+// ---------------------------------------------------------------- poses ------
+HumanPose idle(float t) {
+    HumanPose p;
+    float b = std::sin(t * 1.6f);
+    p.bob = b * 0.004f;
+    p.shoulderL = b * 1.5f;
+    p.shoulderR = -b * 1.5f;
+    p.headYaw = std::sin(t * 0.37f) * 12.0f;
+    return p;
+}
+
+HumanPose walk(float ph, float amt) {
+    HumanPose p;
+    float s = std::sin(ph), c = std::cos(ph);
+    p.thighL = -s * 26.0f * amt;
+    p.thighR = s * 26.0f * amt;
+    p.kneeL = (std::max(0.0f, c) * 38.0f + 4.0f) * amt;
+    p.kneeR = (std::max(0.0f, -c) * 38.0f + 4.0f) * amt;
+    p.shoulderL = s * 22.0f * amt;
+    p.shoulderR = -s * 22.0f * amt;
+    p.elbowL = -12.0f - std::max(0.0f, -s) * 18.0f * amt;
+    p.elbowR = -12.0f - std::max(0.0f, s) * 18.0f * amt;
+    p.bob = (1.0f - std::fabs(s)) * 0.035f * amt;
+    p.torsoPitch = 3.0f * amt;
+    return p;
+}
+
+HumanPose sit(float t) {
+    HumanPose p;
+    p.pelvisDrop = 0.44f;
+    p.thighL = p.thighR = -88.0f;
+    p.kneeL = p.kneeR = 88.0f;
+    p.shoulderL = p.shoulderR = -18.0f;
+    p.elbowL = p.elbowR = -55.0f;
+    p.armOutL = p.armOutR = 10.0f;
+    p.torsoPitch = -6.0f;
+    p.headYaw = std::sin(t * 0.25f) * 10.0f;
+    p.headPitch = std::sin(t * 0.4f) * 3.0f;
+    return p;
+}
+
+HumanPose drive(float t) {
+    HumanPose p = sit(t);
+    p.pelvisDrop = 0.52f;
+    p.thighL = p.thighR = -80.0f;
+    p.kneeL = p.kneeR = 60.0f;
+    p.shoulderL = p.shoulderR = -55.0f;
+    p.elbowL = p.elbowR = -30.0f;
+    p.armOutL = p.armOutR = 8.0f;
+    p.headYaw = std::sin(t * 0.3f) * 6.0f;
+    return p;
+}
+
+HumanPose press(float t) {
+    HumanPose p = idle(t);
+    p.shoulderR = -62.0f + std::sin(t * 6.0f) * 6.0f;
+    p.elbowR = -35.0f + std::sin(t * 6.0f) * 12.0f;
+    p.armOutR = 2.0f;
+    p.headPitch = 8.0f;
+    return p;
+}
+
+HumanPose bend(float a) {
+    HumanPose p;
+    p.torsoPitch = 50.0f * a;
+    p.thighL = p.thighR = -20.0f * a;
+    p.kneeL = p.kneeR = 30.0f * a;
+    p.pelvisDrop = 0.10f * a;
+    p.shoulderR = -60.0f * a;
+    p.shoulderL = -20.0f * a;
+    p.elbowR = -10.0f;
+    p.headPitch = 15.0f * a;
+    return p;
+}
+
+HumanPose blend(const HumanPose& a, const HumanPose& b, float t) {
+    HumanPose r;
+    const float* pa = &a.thighL;
+    const float* pb = &b.thighL;
+    float* pr = &r.thighL;
+    const int n = sizeof(HumanPose) / sizeof(float);
+    for (int i = 0; i < n; ++i) pr[i] = lerpf(pa[i], pb[i], t);
+    return r;
+}
+
+HumanLook randomLook(unsigned seed) {
+    Rng r(seed * 2654435761u + 7u);
+    HumanLook l;
+    const Vec3 skins[] = {Vec3(0.92f, 0.76f, 0.62f), Vec3(0.80f, 0.60f, 0.45f), Vec3(0.66f, 0.46f, 0.32f), Vec3(0.50f, 0.34f, 0.23f), Vec3(0.38f, 0.25f, 0.17f)};
+    const Vec3 hairs[] = {Vec3(0.05f, 0.04f, 0.03f), Vec3(0.20f, 0.12f, 0.06f), Vec3(0.40f, 0.26f, 0.12f), Vec3(0.55f, 0.55f, 0.55f), Vec3(0.12f, 0.08f, 0.05f)};
+    const Vec3 shirts[] = {Vec3(0.85f, 0.15f, 0.15f), Vec3(0.15f, 0.35f, 0.75f), Vec3(0.95f, 0.95f, 0.95f), Vec3(0.20f, 0.55f, 0.30f),
+                           Vec3(0.95f, 0.70f, 0.15f), Vec3(0.55f, 0.25f, 0.60f), Vec3(0.15f, 0.15f, 0.18f), Vec3(0.95f, 0.50f, 0.65f),
+                           Vec3(0.35f, 0.65f, 0.80f), Vec3(0.70f, 0.40f, 0.20f)};
+    const Vec3 pants[] = {Vec3(0.12f, 0.15f, 0.28f), Vec3(0.10f, 0.10f, 0.11f), Vec3(0.55f, 0.48f, 0.35f), Vec3(0.30f, 0.30f, 0.32f), Vec3(0.20f, 0.30f, 0.45f)};
+    l.skin = skins[r.irange(0, 4)];
+    l.hair = hairs[r.irange(0, 4)];
+    l.shirt = shirts[r.irange(0, 9)];
+    l.pants = pants[r.irange(0, 4)];
+    l.shoes = r.chance(0.3f) ? Vec3(0.9f, 0.9f, 0.9f) : Vec3(0.1f, 0.08f, 0.07f);
+    l.hairStyle = r.irange(0, 3);
+    l.height = r.range(0.92f, 1.06f);
+    l.width = r.range(0.92f, 1.12f);
+    l.longSleeve = r.chance(0.35f);
+    l.glasses = r.chance(0.25f);
+    l.skirt = l.hairStyle == 1 && r.chance(0.5f);
+    return l;
+}
+
+// ---------------------------------------------------------------- model ------
+static void heldItem(const Node& hand, HeldItem item) {
+    switch (item) {
+        case HELD_CAN:
+            hand.cyl({0, -0.06f, 0.03f}, {0.065f, 0.12f, 0.065f}, Material(Vec3(0.8f, 0.1f, 0.1f), 0.7f, 64.0f));
+            break;
+        case HELD_CUP:
+            hand.tcone({0, -0.06f, 0.04f}, {0.08f, 0.09f, 0.08f}, Material(Vec3(0.96f), 0.5f, 64.0f), {180, 0, 0});
+            break;
+        case HELD_SNACK:
+            hand.box({0, -0.07f, 0.03f}, {0.12f, 0.15f, 0.04f}, Material(Vec3(0.9f, 0.7f, 0.1f), 0.4f, 32.0f));
+            break;
+        case HELD_PHONE:
+            hand.box({0, -0.05f, 0.03f}, {0.07f, 0.14f, 0.01f}, Mat::black());
+            break;
+        case HELD_KEYS:
+            hand.torus({0, -0.05f, 0.02f}, {0.05f, 0.05f, 0.05f}, Mat::chrome(), {90, 0, 0});
+            break;
+        default: break;
+    }
+}
+
+void draw(const Node& root0, const HumanLook& L, const HumanPose& P, HeldItem held) {
+    const float w = L.width;
+    Node root = root0.scl(Vec3(L.height, L.height, L.height));
+    Material skin(L.skin, 0.15f, 16.0f);
+    Material hair(L.hair, 0.25f, 24.0f);
+    Material shirt = Mat::fabric(L.shirt, 8.0f);
+    Material pants = Mat::fabric(L.pants, 8.0f);
+    Material shoe(L.shoes, 0.35f, 32.0f);
+    Material dark = Mat::black();
+
+    Node pelvis = root.at({0, 0.93f - P.pelvisDrop + P.bob, 0});
+    pelvis.cyl({0, 0.02f, 0}, {0.34f * w, 0.18f, 0.21f}, pants);
+    pelvis.box({0, 0.10f, 0}, {0.335f * w, 0.035f, 0.205f}, Material(Vec3(0.12f, 0.08f, 0.05f), 0.4f, 32.0f));  // belt
+
+    // ---------------- legs ----------------
+    for (int side = -1; side <= 1; side += 2) {
+        bool left = side > 0;   // +X is the character's left (it faces +Z)
+        Node hip = pelvis.at({side * 0.095f * w, -0.03f, 0}).rotX(left ? P.thighL : P.thighR);
+        hip.cyl({0, -0.225f, 0}, {0.15f * w, 0.45f, 0.16f}, pants);
+        Node knee = hip.at({0, -0.45f, 0}).rotX(left ? P.kneeL : P.kneeR);
+        knee.sph({0, 0, 0}, {0.13f * w, 0.12f, 0.14f}, pants);
+        knee.cyl({0, -0.21f, 0}, {0.12f * w, 0.42f, 0.13f}, pants);
+        Node ankle = knee.at({0, -0.42f, 0}).rotX(-(left ? P.kneeL : P.kneeR) * 0.3f - (left ? P.thighL : P.thighR) * 0.4f);
+        ankle.box({0, -0.025f, 0.045f}, {0.11f, 0.07f, 0.26f}, shoe);
+        ankle.box({0, -0.058f, 0.045f}, {0.115f, 0.015f, 0.265f}, Material(Vec3(0.9f), 0.2f, 16.0f));
+    }
+    if (L.skirt) pelvis.tcone({0, -0.2f, 0}, {0.42f * w, 0.42f, 0.3f}, pants, {180, 0, 0});
+
+    // ---------------- torso ----------------
+    Node torso = pelvis.at({0, 0.08f, 0}).rotX(P.torsoPitch);
+    torso.cyl({0, 0.12f, 0}, {0.31f * w, 0.26f, 0.20f}, shirt);                       // abdomen (elliptic cylinder)
+    torso.sph({0, 0.32f, 0}, {0.40f * w, 0.36f, 0.25f}, shirt);                       // chest (scaled sphere)
+    torso.part(M_FRUSTUM_BOX, {0, 0.36f, -0.005f}, {0.38f * w, 0.18f, 0.22f}, shirt, {0, 0, 180});  // upper chest / shoulder line
+    for (int side = -1; side <= 1; side += 2) torso.sph({side * 0.19f * w, 0.42f, 0}, {0.12f, 0.11f, 0.13f}, shirt);
+    torso.part(M_TORUS, {0, 0.465f, 0}, {0.21f, 0.12f, 0.18f}, shirt);               // collar ring
+
+    // ---------------- head ----------------
+    Node neck = torso.at({0, 0.47f, 0});
+    neck.cyl({0, 0.04f, 0}, {0.09f, 0.09f, 0.09f}, skin);
+    Node head = neck.at({0, 0.09f, 0}).rotY(P.headYaw).rotX(P.headPitch);
+    head.sph({0, 0.105f, 0.005f}, {0.20f, 0.245f, 0.215f}, skin);
+    head.sph({0, 0.085f, 0.105f}, {0.032f, 0.045f, 0.04f}, skin);                      // nose
+    for (int e = -1; e <= 1; e += 2) {
+        head.sph({e * 0.042f, 0.125f, 0.092f}, Vec3(0.026f), Material(Vec3(0.95f), 0.4f, 32.0f));   // eye white
+        head.sph({e * 0.042f, 0.125f, 0.103f}, Vec3(0.014f), dark);                                 // pupil
+        head.box({e * 0.042f, 0.158f, 0.098f}, {0.04f, 0.008f, 0.01f}, hair);                       // eyebrow
+        head.sph({e * 0.102f, 0.10f, 0.0f}, {0.03f, 0.055f, 0.035f}, skin);                         // ear
+    }
+    head.box({0, 0.045f, 0.098f}, {0.05f, 0.009f, 0.01f}, Material(L.skin * 0.7f + Vec3(0.12f, 0.0f, 0.0f), 0.2f, 16.0f));  // mouth
+    if (L.glasses) {
+        for (int e = -1; e <= 1; e += 2) head.torus({e * 0.042f, 0.125f, 0.112f}, {0.07f, 0.07f, 0.07f}, dark, {90, 0, 0});
+        head.box({0, 0.128f, 0.113f}, {0.03f, 0.006f, 0.006f}, dark);
+    }
+    switch (L.hairStyle) {
+        case 0:
+            head.part(M_HEMISPHERE, {0, 0.12f, -0.018f}, {0.215f, 0.25f, 0.232f}, hair);
+            head.sph({0, 0.11f, -0.045f}, {0.207f, 0.21f, 0.17f}, hair);
+            break;
+        case 1:
+            head.part(M_HEMISPHERE, {0, 0.12f, -0.02f}, {0.222f, 0.26f, 0.236f}, hair);
+            head.box({0, 0.0f, -0.07f}, {0.21f, 0.30f, 0.09f}, hair);
+            break;
+        case 2:
+            head.part(M_HEMISPHERE, {0, 0.12f, -0.018f}, {0.218f, 0.25f, 0.234f}, hair);
+            head.sph({0, 0.20f, -0.10f}, Vec3(0.10f), hair);
+            break;
+        default: {
+            Material cap = Mat::fabric(L.shirt * 0.6f + Vec3(0.1f), 6.0f);
+            head.part(M_HEMISPHERE, {0, 0.13f, -0.012f}, {0.225f, 0.23f, 0.238f}, cap);
+            head.box({0, 0.145f, 0.13f}, {0.18f, 0.012f, 0.1f}, cap);
+            break;
+        }
+    }
+
+    // ---------------- arms ----------------
+    for (int side = -1; side <= 1; side += 2) {
+        bool left = side > 0;
+        Node sh = torso.at({side * 0.205f * w, 0.42f, 0}).rotX(left ? P.shoulderL : P.shoulderR).rotZ(side * (left ? P.armOutL : P.armOutR));
+        sh.cyl({0, -0.145f, 0}, {0.095f, 0.29f, 0.095f}, shirt);
+        Node el = sh.at({0, -0.29f, 0}).rotX(left ? P.elbowL : P.elbowR);
+        el.sph({0, 0, 0}, Vec3(0.085f), L.longSleeve ? shirt : skin);
+        el.cyl({0, -0.13f, 0}, {0.08f, 0.26f, 0.08f}, L.longSleeve ? shirt : skin);
+        Node hand = el.at({0, -0.29f, 0});
+        hand.sph({0, 0, 0.005f}, {0.075f, 0.095f, 0.055f}, skin);
+        if (!left) heldItem(hand, held);
+    }
+}
+
+}  // namespace Human

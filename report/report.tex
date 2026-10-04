@@ -1,0 +1,1244 @@
+% =============================================================================
+%  Jungle Rest Stop - Computer Graphics Lab Project Report
+%  Build:  pdflatex report.tex   (run twice for the table of contents)
+%  Figures: main.exe --shots report/shots  ->  python report/make_figures.py
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.1cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{graphicx,float,caption,subcaption,booktabs,tabularx,longtable,array}
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor,listings,enumitem,fancyhdr,parskip}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,calc,fit,backgrounds}
+\usepackage[hidelinks]{hyperref}
+\usepackage[capitalise,noabbrev]{cleveref}
+
+% ---- change these if needed ----
+\newcommand{\studentname}{Md.\ Nayeem}
+\newcommand{\studentroll}{2107050}
+\newcommand{\coursename}{Computer Graphics / Image Processing Lab}
+\newcommand{\university}{Khulna University of Engineering \& Technology}
+\newcommand{\department}{Department of Computer Science and Engineering}
+
+\input{generated/stats.tex}
+\graphicspath{{figures/}}
+\setlength{\parskip}{0.55em}
+\captionsetup{font=small,labelfont=bf}
+\setlist{itemsep=0.15em,topsep=0.3em}
+
+\definecolor{codebg}{RGB}{246,247,250}
+\definecolor{codekw}{RGB}{0,70,160}
+\definecolor{codecm}{RGB}{90,120,90}
+\lstset{language=C++,basicstyle=\ttfamily\footnotesize,keywordstyle=\color{codekw}\bfseries,
+  commentstyle=\color{codecm}\itshape,backgroundcolor=\color{codebg},frame=single,rulecolor=\color{black!15},
+  breaklines=true,columns=fullflexible,showstringspaces=false,xleftmargin=0.6em,xrightmargin=0.6em}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small Jungle Rest Stop -- OpenGL Project}
+\rhead{\small \studentname\ (\studentroll)}
+\cfoot{\thepage}
+
+\tikzset{
+  box/.style={draw,rounded corners=3pt,align=center,fill=#1,minimum height=0.9cm,inner sep=4pt,font=\small},
+  box/.default=blue!8,
+  state/.style={draw,rounded corners=6pt,align=center,fill=#1,minimum height=0.8cm,inner sep=4pt,font=\small},
+  state/.default=green!10,
+  arr/.style={-{Stealth[length=2.5mm]},thick},
+  lbl/.style={font=\footnotesize,midway,fill=white,inner sep=1pt}
+}
+
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcommand{\shot}[3][0.9]{\begin{figure}[H]\centering\includegraphics[width=#1\linewidth]{#2}\caption{#3}\end{figure}}
+
+\begin{document}
+
+% =============================================================================
+\begin{titlepage}
+\centering
+\vspace*{1.2cm}
+{\large \university\par}
+{\normalsize \department\par}
+\vspace{1.5cm}
+{\Large \coursename\par}
+\vspace{1.2cm}
+{\Huge\bfseries Jungle Rest Stop\par}
+\vspace{0.4cm}
+{\Large An interactive 3D scene built only from basic shapes\\ with OpenGL 3.3\par}
+\vspace{1.2cm}
+\includegraphics[width=0.85\linewidth]{ext_day}\par
+\vspace{1.2cm}
+\begin{tabular}{rl}
+\textbf{Student:} & \studentname \\
+\textbf{Roll:} & \studentroll \\
+\textbf{Language / API:} & C++17, OpenGL 3.3 Core, GLFW, GLAD \\
+\textbf{Date:} & October 2026 \\
+\end{tabular}
+\vfill
+\end{titlepage}
+
+% =============================================================================
+\begin{abstract}
+This report presents \emph{Jungle Rest Stop}, a real-time 3D scene made with OpenGL 3.3. A small
+rest stop stands in a clearing in a thick jungle. It has three connected rooms: a main lounge
+with sofas, a TV, a coffee machine and three working vending machines; an ATM room where the
+ATM shows every step of a withdrawal; and a library with an aquarium. Visitors are computer-controlled
+people (NPCs). They arrive only by car, park, walk inside, use the machines, sit, watch TV
+or read, and then drive away. The user controls one person and can view the scene in first person,
+third person or with a free camera, and can change the field of view.
+
+\textbf{Every object is made only from basic shapes} (cube, cylinder, sphere, cone, torus, wedge
+and a few more) using translation, rotation and scaling. No 3D model files are loaded, and no texture
+images are loaded either: all textures are generated in code. A single key (or an on-screen
+button) switches between a \emph{Basic} mode (flat colours with simple lighting) and an
+\emph{Enhanced} mode (textures, shadow mapping, fog, sky, wind and tone mapping). The scene
+also has a full day and night cycle and many kinds of light. Because the target computer has only an
+integrated GPU (Intel Iris Xe), the program uses instanced drawing, chunk culling and per-room
+light lists, and it keeps the frame rate capped at a steady 60 (or 30) frames per second.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% =============================================================================
+\section{Introduction}
+Computer graphics lets us build a whole world inside the computer and walk through it. In this lab
+project the goal was to upgrade an older, simple vending machine scene into a complete, living
+place, while still following the main rule of the course: \emph{build everything from basic shapes
+by using transformations}.
+
+The final program shows:
+\begin{itemize}
+  \item a building with \textbf{three connected rooms} (main lounge, ATM room, library),
+  \item \textbf{three fully working vending machines}. You insert money, type a code, the spiral
+        turns, the item falls, and you take it out through the flap and collect your change,
+  \item an \textbf{ATM} that guides the user step by step, both on its own screen and in a side panel,
+  \item a \textbf{coffee machine}, a \textbf{TV} with four animated channels and an \textbf{aquarium} with fish,
+  \item a parking lot and a road through a \textbf{procedural jungle} (trees, palms, bamboo,
+        banana plants, ferns, grass, flowers, rocks, logs, vines, birds and fireflies),
+  \item \textbf{NPC visitors} who come only by car and use the building like real people,
+  \item \textbf{day and night}, light bulbs, lamps, spot lights, street lights and car headlights,
+  \item a \textbf{Basic / Enhanced} switch, first person, third person and free cameras, and \textbf{FOV} control.
+\end{itemize}
+
+% =============================================================================
+\section{Objectives}
+\begin{enumerate}
+  \item Study the old project and find its weak points.
+  \item Model every object only with basic shapes and 3D transformations (translate, rotate, scale),
+        using hierarchical (parent--child) modelling.
+  \item Build three connected rooms with realistic furniture and working machines.
+  \item Make NPC visitors who arrive by car, park, enter, act and leave.
+  \item Show realistic lighting: several light types, real bulb models, and a day and night cycle.
+  \item Add textures, shadows, fog and a sky, with a switch back to a basic look.
+  \item Make the outside a dense jungle.
+  \item Keep the code modular, and keep the frame rate between 30 and 60 FPS on a weak GPU.
+  \item Write a clear report with screenshots.
+\end{enumerate}
+
+% =============================================================================
+\section{Tools and Environment}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Item & Used \\ \midrule
+Language & C++17 (MinGW-w64 / MSYS2 \texttt{g++}) \\
+Graphics API & OpenGL 3.3 Core profile, GLSL 330 \\
+Window / input & GLFW 3 \\
+OpenGL loader & GLAD 2 \\
+Text & Windows GDI renders one font atlas at start-up (Consolas) \\
+Assets & \textbf{none}: all meshes and all textures are generated in code \\
+Test PC & Intel Core i5-1135G7, \textbf{Intel Iris Xe (integrated GPU)}, 1280$\times$720 window, 4$\times$MSAA \\
+\bottomrule
+\end{tabular}
+
+% =============================================================================
+\section{From the Old Project to the New One}
+The old project (kept in the \texttt{legacy/} folder) was one file, \texttt{main.cpp}, with
+2,341 lines. It drew each shape with its own draw call and looked up every uniform by name for every
+shape. Its trees were a few spheres on cylinders, and it had no textures, shadows or text on screens.
+\Cref{tab:oldnew} compares the old and new versions.
+
+\begin{table}[H]
+\centering
+\caption{Old project versus the upgraded project}\label{tab:oldnew}
+\begin{tabularx}{\linewidth}{@{}lXX@{}}
+\toprule
+Topic & Old project & New project \\ \midrule
+Code structure & 1 big file + 4 headers & 46 files in 8 modules (about 9,400 lines) \\
+Drawing & 1 draw call per shape, uniform lookup each time & instanced drawing; static world baked into \statChunks\ chunks \\
+Shapes & cube, cylinder, sphere, coil, plane & 15 basic shapes + terrain grid \\
+Textures & none & 25 procedural textures (texture array, mip-maps) \\
+Shadows / fog / sky & no / no / flat colour & shadow map with PCF / distance fog / sky with clouds, sun, moon, stars \\
+Rooms & vending, ATM, ticket rooms (boxes) & lounge, ATM room, library with windows, doors and real furniture \\
+Machines & keys print a message & full state machines, screens with text, coins, cards, cash, receipts \\
+People & one avatar & articulated humans with walk, sit, drive, press and bend poses + NPC AI \\
+Cars & none & sedan, SUV and hatchback with steering, spinning wheels, doors and lights \\
+Outside & 31 trees made of spheres & \statJungleTrees\ rainforest trees, \statPalms\ palms, bamboo, banana plants, \statFerns\ ferns, \statGrass\ grass tufts \\
+Time of day & fixed & 24 h cycle, automatic street lamps \\
+Cameras & orbit + first person & first person, third person, free camera + FOV \\
+Frame rate & sleep to 100 FPS & accurate cap at 60 or 30 FPS \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% =============================================================================
+\section{System Design}
+\subsection{Modules}
+The code is split into small modules. Each one has a single job (\Cref{fig:modules}).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.55cm and 0.45cm]
+\node[box=orange!15,minimum width=12.5cm] (app) {\textbf{app/} \;App (main loop, input, frame cap) \quad Showcase (report screenshots)};
+\node[box=yellow!15,below=of app,xshift=-4.7cm,minimum width=3cm] (game) {\textbf{game/}\\Player, cameras\\Interaction (ray pick)\\Collision, DayNight\\HUD, Inventory};
+\node[box=green!12,right=of game,minimum width=2.6cm] (scene) {\textbf{scene/}\\Layout, Building\\Furniture, Nature\\Lights, Materials};
+\node[box=cyan!12,right=of scene,minimum width=2.8cm] (objects) {\textbf{objects/}\\VendingMachine\\ATM, Coffee, TV\\Aquarium, Products};
+\node[box=purple!10,right=of objects,minimum width=2.4cm] (actors) {\textbf{actors/}\\Human, Car\\Visitors (NPC AI)};
+\node[box=blue!10,below=1.0cm of $(scene)!0.5!(objects)$,minimum width=12.5cm] (gfx) {\textbf{gfx/} \;Shapes (basic meshes) \;$\cdot$\; Draw (Material + Node) \;$\cdot$\; Renderer \;$\cdot$\; Textures \;$\cdot$\; Text \;$\cdot$\; Shader};
+\node[box=gray!12,below=0.45cm of gfx,minimum width=12.5cm] (core) {\textbf{core/} \;Math3D: vectors, matrices, translate / rotate / scale, frustum, noise, random};
+\foreach \n in {game,scene,objects,actors} {\draw[arr] (app.south -| \n) -- (\n.north); \draw[arr] (\n.south) -- (gfx.north -| \n);}
+\draw[arr] (gfx) -- (core);
+\end{tikzpicture}
+\caption{Module overview. Arrows mean ``uses''.}\label{fig:modules}
+\end{figure}
+
+\subsection{One frame of the program}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.35cm]
+\node[box=yellow!15] (a) {Input\\(keys, mouse)};
+\node[box=yellow!15,right=of a] (b) {Update\\player, time,\\machines, NPCs};
+\node[box=yellow!15,right=of b] (c) {Interaction\\ray cast};
+\node[box=blue!10,right=of c] (d) {Collect\\dynamic shapes\\+ lights};
+\node[box=blue!10,right=of d] (e) {Shadow\\pass};
+\node[box=blue!10,below=0.6cm of e] (f) {Sky +\\opaque world};
+\node[box=blue!10,left=of f] (g) {Screen text\\(ATM, TV ...)};
+\node[box=blue!10,left=of g] (h) {Transparent\\(glass, water)};
+\node[box=blue!10,left=of h] (i) {HUD};
+\node[box=orange!15,left=of i] (j) {Swap +\\frame cap};
+\draw[arr] (a)--(b); \draw[arr] (b)--(c); \draw[arr] (c)--(d); \draw[arr] (d)--(e); \draw[arr] (e)--(f);
+\draw[arr] (f)--(g); \draw[arr] (g)--(h); \draw[arr] (h)--(i); \draw[arr] (i)--(j);
+\end{tikzpicture}
+\caption{Steps of one frame.}\label{fig:frame}
+\end{figure}
+
+\subsection{Scene layout}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=0.29cm,y=-0.29cm]
+\fill[green!25!white] (-30,-12) rectangle (30,30);
+\fill[gray!55] (-24,8.5) rectangle (24,23.5);
+\fill[gray!55] (-30,12.3) rectangle (-24,19.7); \fill[gray!55] (24,12.3) rectangle (30,19.7);
+\fill[gray!20] (-14,5) rectangle (17,8.5);
+\draw[thick,fill=yellow!20] (-12,-5) rectangle (-7,5);
+\draw[thick,fill=orange!15] (-7,-5) rectangle (7,5);
+\draw[thick,fill=cyan!12] (7,-5) rectangle (15,5);
+\node[font=\scriptsize,align=center] at (-9.5,0) {ATM\\room};
+\node[font=\scriptsize,align=center] at (0,0) {MAIN LOUNGE\\TV, sofas, coffee,\\3 vending machines};
+\node[font=\scriptsize,align=center] at (11,0) {LIBRARY\\+ aquarium};
+\draw[very thick,white] (-1.2,5) -- (1.2,5);
+\draw[very thick,white] (-7,-3.4) -- (-7,-1.8);
+\draw[very thick,white] (7,-1.2) -- (7,0.4);
+\foreach \i in {-15,-12,-9,-6,-3,3,6,9,12,15} {\draw[white] (\i-1.5,8.9)--(\i-1.5,13.5); \draw[white] (\i-1.5,18.5)--(\i-1.5,23.1);}
+\draw[white,dashed] (-30,16) -- (30,16);
+\node[font=\scriptsize] at (0,10.6) {sidewalk};
+\node[font=\scriptsize,white] at (-19,16) {one-way aisle / road $\leftarrow$};
+\node[font=\scriptsize] at (0,26.5) {jungle all around};
+\node[font=\scriptsize] at (21,11) {parking};
+\draw[arr] (-29,32) -- (-25,32) node[right,font=\scriptsize]{$+x$};
+\draw[arr] (-29,32) -- (-29,28) node[above,font=\scriptsize]{$-z$};
+\end{tikzpicture}
+\caption{Top view of the layout (1 grid unit = 1 m). The building faces $+z$, towards the parking lot.}\label{fig:layout}
+\end{figure}
+
+% =============================================================================
+\section{The Basic Shapes}
+Everything is built from the small set of \emph{unit} meshes in \Cref{tab:shapes}. Each one is
+centred at the origin with a size of about one unit. They are created once at start-up
+(\texttt{gfx/Shapes.cpp}) and kept on the GPU.
+
+\begin{table}[H]
+\centering
+\caption{Basic shapes and how they are generated}\label{tab:shapes}
+\begin{tabularx}{\linewidth}{@{}lXl@{}}
+\toprule
+Shape & How it is generated & Typical use \\ \midrule
+Cube & 6 faces $\times$ 4 vertices (flat normals), $[-0.5,0.5]^3$ & walls, panels, keys, books \\
+Cylinder & ring of 24 vertices at $y=\pm0.5$, radius 0.5, plus two caps & legs, poles, cans, wheels \\
+Cylinder (low) & same, 8 sides only & tree trunks, bamboo \\
+Sphere & latitude/longitude grid, 14 $\times$ 20 & heads, LEDs, bulbs \\
+Sphere (low) & 5 $\times$ 8 grid & foliage blobs, rocks \\
+Cone & cylinder with top radius 0 & fish tails, snake-plant leaves \\
+Truncated cone & cylinder with top radius 0.35 & cups, pots, lamp shades, poles \\
+Torus & ring radius 0.4, tube radius 0.1 & clock rim, tyres on rings, collars \\
+Hemisphere & top half of a sphere + bottom disc & hair, domes, bowl \\
+Wedge & right-angled triangle extruded along $x$ & bonnet, buttress roots, fins \\
+Tapered box & bottom $1\times1$, top $0.7\times0.6$ & car cabin, chest, lamp head \\
+Quad & one square in the $xy$ plane & palm fronds, vines \\
+Cross card & two crossed quads, $y\in[0,1]$ & grass, ferns, flowers \\
+Leaf card & three crossed quads & leaf clusters of trees \\
+Coil & tube swept along a helix (5 turns) & vending machine spirals \\
+Terrain grid & $150\times150$ grid displaced by $h(x,z)$ & the ground \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The curved shapes come from simple parametric formulas. For a cylinder (radius $r$, angle
+$\theta_i = 2\pi i/n$):
+\[
+\mathbf{p}_i^{top} = (r\cos\theta_i,\ 0.5,\ r\sin\theta_i),\qquad
+\mathbf{p}_i^{bottom} = (r\cos\theta_i,\ -0.5,\ r\sin\theta_i),\qquad
+\mathbf{n}_i = (\cos\theta_i,\ 0,\ \sin\theta_i).
+\]
+A sphere uses $\mathbf{p}(\phi,\theta) = 0.5\,(\sin\phi\cos\theta,\ \cos\phi,\ \sin\phi\sin\theta)$ with
+normal $\mathbf{n}=2\mathbf{p}$. A torus uses
+$\mathbf{p}(u,w) = (R + r\cos w)(\cos u, 0, \sin u) + (0, r\sin w, 0)$. The coil follows the helix
+$\mathbf{c}(t) = (R\cos 2\pi k t,\ R\sin 2\pi k t,\ L(t-0.5))$, and a small circle is placed around each
+point of it.
+
+\shot[0.75]{obj_shapes}{The basic shapes rendered by the program (cube, cylinder, sphere, cone, truncated cone, torus, hemisphere, wedge, tapered box, quad, cross card, coil).}
+
+% =============================================================================
+\section{Transformations and Hierarchical Modelling}
+\subsection{The three basic transformations}
+All matrices are $4\times4$ and column-major, so they can go straight to OpenGL.
+\[
+T(t)=\begin{bmatrix}1&0&0&t_x\\0&1&0&t_y\\0&0&1&t_z\\0&0&0&1\end{bmatrix}\quad
+S(s)=\begin{bmatrix}s_x&0&0&0\\0&s_y&0&0\\0&0&s_z&0\\0&0&0&1\end{bmatrix}\quad
+R_y(\theta)=\begin{bmatrix}\cos\theta&0&\sin\theta&0\\0&1&0&0\\-\sin\theta&0&\cos\theta&0\\0&0&0&1\end{bmatrix}
+\]
+$R_x$ and $R_z$ work in the same way. Rotation about any axis $\mathbf{a}$ uses Rodrigues'
+formula $R = \cos\theta\,I + (1-\cos\theta)\,\mathbf{a}\mathbf{a}^T + \sin\theta\,[\mathbf{a}]_\times$.
+The camera uses the usual \texttt{lookAt} view matrix and a perspective projection
+\[
+P = \begin{bmatrix}\frac{1}{a\tan(f/2)}&0&0&0\\0&\frac{1}{\tan(f/2)}&0&0\\0&0&-\frac{z_f+z_n}{z_f-z_n}&-\frac{2z_fz_n}{z_f-z_n}\\0&0&-1&0\end{bmatrix},
+\]
+where $f$ is the field of view, which the user changes with the mouse wheel (see \Cref{sec:camera}).
+
+\subsection{Order of operations}
+Every part of every object is placed with
+\[
+M_{part} = M_{parent}\cdot T(\text{position})\cdot R(\text{rotation})\cdot S(\text{size}).
+\]
+The unit shape is first \textbf{scaled} to the right size, then \textbf{rotated}, then
+\textbf{moved} to its place inside the parent, and finally the parent's own matrix carries it
+into the world. Normals use the normal matrix $N = (M^{-1})^T$ (upper $3\times3$ part), which keeps
+lighting correct even when a shape is stretched.
+
+\subsection{The \texttt{Node} helper}
+Objects are written as trees of \texttt{Node}s. A child node only stores the extra transform
+relative to its parent, so moving the parent moves all its children too.
+\begin{lstlisting}
+struct Node {
+    DrawSink* sink;  Mat4 M;                         // M = this node's world matrix
+    Node at(const Vec3& p, const Vec3& rotDeg) const // child: M * T(p) * R(rot)
+        { return Node(*sink, rotateYXZ(translate(M, p), rotDeg)); }
+    Node rotX(float deg) const { return rot(deg, Vec3(1,0,0)); }
+    void part(MeshId mesh, Vec3 pos, Vec3 size, const Material& m, Vec3 rotDeg = {}) const
+        { sink->add(mesh, scale(rotateYXZ(translate(M, pos), rotDeg), size), m); }
+};
+// Example: a sofa arm = a box plus a "rolled" cylinder lying along Z
+n.box({x, 0.42f, 0.0f}, {0.16f, 0.44f, 0.88f}, fabric);
+n.part(M_CYLINDER, {x, 0.64f, 0.0f}, {0.19f, 0.88f, 0.19f}, fabric, {90, 0, 0});
+\end{lstlisting}
+The same object code can send its shapes to different ``sinks'': the static world, the
+per-frame list, a counter (used for the tables in this report) or a limiter that only lets the
+first $k$ parts through. The limiter is how the ``build stage'' pictures below were made.
+
+\subsection{Example hierarchy: the human body}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[level distance=1.15cm,
+  level 1/.style={sibling distance=5.6cm},level 2/.style={sibling distance=2.0cm},level 3/.style={sibling distance=1.9cm},
+  every node/.style={draw,rounded corners=3pt,fill=purple!8,font=\scriptsize,align=center,inner sep=3pt}]
+\node {root (feet)\\$T(pos)\,R_y(yaw)\,S(height)$}
+  child {node {pelvis\\$T(0,0.93-drop+bob,0)$}
+     child {node {thigh L\\$R_x(\theta_{hip})$} child {node {shin\\$R_x(\theta_{knee})$} child {node {foot}}}}
+     child {node {thigh R} child {node {shin} child {node{foot}}}}}
+  child {node {torso\\$T(0,0.08,0)R_x(lean)$}
+     child {node {neck} child {node {head\\$R_y R_x$} child {node{face, hair}}}}
+     child {node {upper arm L/R\\$R_x(sh)R_z(out)$} child {node {forearm\\$R_x(elbow)$} child {node{hand\\(+ item)}}}}};
+\end{tikzpicture}
+\caption{Scene graph of a person. The pose only changes the joint angles $\theta$, while every body part stays attached to its parent.}\label{fig:humangraph}
+\end{figure}
+
+% =============================================================================
+\section{Building Every Object from Basic Shapes}
+\Cref{tab:parts} lists how many basic shapes each object uses and which ones. The numbers are
+counted by the program itself (a counting sink). After the table, each important object is
+explained with its parts and transformations. The \emph{build stage} strips show the object while
+it is being assembled, after 12\%, 35\% and 65\% of its parts and when it is complete.
+
+\begin{table}[H]
+\centering\scriptsize
+\caption{Number of basic shapes per object (Cyl-L / Sph-L = low-poly versions, TCone = truncated cone, TBox = tapered box)}\label{tab:parts}
+\setlength{\tabcolsep}{3.2pt}
+\input{generated/parts_table.tex}
+\end{table}
+
+% -----------------------------------------------------------------------------
+\subsection{Vending machine}
+The machine is \(1.0 \times 1.95 \times 0.8\) m. Its origin is at the floor in the middle, and it
+faces $+z$. Its \emph{cabinet} is drawn once into the static world. The moving parts (spirals,
+products, keys, LEDs, flap and coins) are drawn every frame.
+
+\begin{table}[H]
+\centering\small
+\caption{Main parts of the vending machine (sizes and positions in metres, in the machine's own space)}
+\begin{tabularx}{\linewidth}{@{}P{3.6cm}P{2.3cm}P{3.4cm}X@{}}
+\toprule
+Part & Shape & Size $(s_x,s_y,s_z)$ & Position / rotation \\ \midrule
+Back, sides, top, base & cube & back $(1, 1.86, .04)$, side $(.04, 1.86, .8)$ & back $(0,1.0,-.38)$, sides $(\pm.48,1.0,0)$, top $(0,1.93,0)$ \\
+4 levelling feet & cylinder & $(.06,.05,.06)$ & $(\pm.42, .025, \pm.32)$ \\
+Lit marquee (title) & cube, emissive & $(.94,.12,.02)$ & $(0,1.86,.39)$ \\
+Display cavity + tube light & cube, cylinder & tube $(.022,.6,.022)$ & tube rotated $R_z(90^\circ)$ at $(-.15,1.76,.30)$ \\
+4 shelves A--D & cube & $(.62,.015,.38)$ & $y_r = 1.555,\ 1.285,\ 1.015,\ 0.745$ \\
+12 spirals & coil & radius .055, 5 turns, .30 long & $(x_c, y_r+.065, -.06)$, $R_z(-spin)$ \\
+48 products & see \Cref{tab:products} & & 4 per slot, $z = .0525 - .075k$ \\
+Front glass & cube, $\alpha=0.18$ & $(.62,1.14,.008)$ & $(-.15,1.22,.385)$ \\
+Control panel + LCD & cube & $(.27,1.30,.04)$ & $(.33,1.20,.38)$ \\
+9 keys (A B C D 1 2 3 CLR OK) & cube & $(.05,.045,.014)$ & grid $x=.255/.325/.395$, $y=1.50-.06\,row$; pushed in by $.007$ m when pressed \\
+3 status LEDs & sphere, emissive & $.022$ & ready (green), vending (amber), item (blue) \\
+Coin slot, note slot, card pad, coin cup & cube & small plates & $y = 1.23,\ 1.12,\ 1.00,\ 0.86$ \\
+Coin-return lever & cube & $(.02,.05,.02)$ & $R_x(40^\circ\cdot press)$ \\
+Collection flap & cube (child node) & $(.58,.34,.015)$ & hinge node $T(-.15,.57,.39)\cdot R_x(\theta_{flap})$ \\
+Returned coins & cylinder & $(.024,.004,.024)$ & fall with gravity into the cup \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{stages_vending}\caption{Vending machine build stages.}\end{figure}
+
+\paragraph{How it works.} Each machine is a small \emph{state machine} (\Cref{fig:vendsm}).
+Money is kept as an integer number of Taka, so there are no rounding errors. When you press
+\textbf{OK}, the spiral turns $360^\circ$ in 1.6 s, and the products move forward by one place
+($0.075$ m). The front product then becomes a free body with velocity $\mathbf{v}$, gravity
+$g = 9.81\,\mathrm{m/s^2}$ and spin. When it hits the tray floor it bounces with restitution 0.32:
+\[
+\mathbf{v}_{y} \leftarrow \mathbf{v}_{y} - g\,\Delta t,\qquad \mathbf{p}\leftarrow\mathbf{p}+\mathbf{v}\,\Delta t,\qquad
+\text{if } p_y < y_{floor}:\ v_y \leftarrow -0.32\,v_y .
+\]
+When the bounce speed drops below $0.35$ m/s, the product lies on its side and waits. Pushing the
+flap rotates it inward around its top hinge, and the item goes into the player's bag. Any change
+falls as coins into the coin cup. An empty slot is refilled automatically after 40 s.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.6cm and 1.25cm,scale=0.88,transform shape]
+\node[state] (idle) {IDLE\\insert money,\\type code};
+\node[state,right=of idle] (vend) {VENDING\\spiral turns};
+\node[state,right=of vend] (drop) {DROPPING\\gravity + bounce};
+\node[state,right=of drop] (ready) {READY\\item in tray};
+\draw[arr] (idle) -- node[lbl,above=2pt]{OK, credit$\ge$price} (vend);
+\draw[arr] (vend) -- node[lbl,above=2pt]{1.6 s} (drop);
+\draw[arr] (drop) -- node[lbl,above=2pt]{at rest} (ready);
+\draw[arr] (ready.south) -- ++(0,-0.7) -| node[lbl,pos=0.25]{push flap $\rightarrow$ item to bag, change to cup} (idle.south);
+\end{tikzpicture}
+\caption{Vending machine state machine.}\label{fig:vendsm}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{vending_code}\caption{Code B1 typed, credit enough}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{vending_dispense}\caption{Spiral pushes the can out}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{vending_ready}\caption{``Take your item''}\end{subfigure}
+\caption{Buying an energy drink. The LCD, the price tags and the key labels are real text drawn on the machine.}
+\end{figure}
+
+\subsection{Products}
+\begin{table}[H]
+\centering\small
+\caption{Products and their shapes}\label{tab:products}
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Product & Built from \\ \midrule
+Can & cylinder body $(.064,.11,.064)$ + colour band cylinder + 2 thin metal rim cylinders \\
+Bottle & cylinder body + truncated-cone shoulder + thin neck cylinder + cap cylinder + label cylinders \\
+Chips bag & box body + flattened sphere ``puff'' + 2 crimp boxes + round logo (cylinder rotated $R_x 90^\circ$) \\
+Chocolate bar & box wrapper + narrower box band \\
+Cookie box & box + stripe box + round cookie picture (cylinder) \\
+Juice box & box carton + front label box + tilted straw cylinder \\
+\bottomrule
+\end{tabularx}
+\end{table}
+\shot[0.6]{obj_products}{Products: can, bottle, juice box, chips bag, chocolate bar, cookie box.}
+
+% -----------------------------------------------------------------------------
+\subsection{ATM}
+\begin{table}[H]
+\centering\small
+\caption{Main parts of the ATM}
+\begin{tabularx}{\linewidth}{@{}llX@{}}
+\toprule
+Part & Shape & Size / transformation \\ \midrule
+Plinth, lower cabinet, upper fascia & cubes & $(1.0,.08,.72)$, $(.96,.92,.66)$, $(.96,.80,.50)$ \\
+Header with light strip & cubes & $(1.04,.24,.72)$ at $y=1.96$; emissive strip under it \\
+Privacy wings & cubes & $(.04,.62,.30)$ at $x=\pm0.5$ \\
+Keypad shelf & cube in a child node & node $T(0,1.035,0.40)\cdot R_x(12^\circ)$ so the keypad tilts towards the user \\
+16 keypad keys & cubes & $(.062,.018,.042)$ on the tilted node; CANCEL red, CLEAR yellow, ENTER green \\
+Screen bezel + screen & cube + text canvas & $0.40\times0.30$ m screen drawn with rectangles and text \\
+8 side keys & cubes & $(.04,.03,.016)$ at $x=\pm.245$, four rows \\
+Card, cash, receipt & cubes & card slides along $z$, 4 bills slide out, receipt rotates $R_x(25^\circ a)$ \\
+Camera dome & hemisphere & rotated $R_x(90^\circ)$ above the screen \\
+\bottomrule
+\end{tabularx}
+\end{table}
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{stages_atm}\caption{ATM build stages.}\end{figure}
+
+% -----------------------------------------------------------------------------
+\subsection{Coffee machine, TV and aquarium}
+\textbf{Coffee machine.} It has a base box, a steel column, two black side panels, a head box, two nozzle
+cylinders, a drip tray (box + 6 thin bars), a bean hopper (a glass truncated cone turned upside down
+with $R_x(180^\circ)$, so it is wider at the top), a beans cylinder, a lid, a glass water tank,
+three round buttons (cylinders rotated $R_x(90^\circ)$ with torus rings) and an LCD. The cup is an
+upside-down truncated cone with a torus handle. The coffee inside is a cylinder whose height is
+$0.07\cdot fill$. The pouring stream is a thin cylinder that reaches from the nozzle to the coffee
+surface. Steam is made of small transparent spheres that rise, grow and fade.
+
+\textbf{TV.} It has a wall bracket, a black body box, an emissive screen and a power LED. The four channels
+(news, nature, sports, weather) are 2D drawings made from rectangles and text on a canvas laid on the
+screen. Circles (heads, sun, trees, ball) are drawn as horizontal strips of width
+$2\sqrt{r^2-y^2}$. When the TV is on, it also adds a flickering coloured point light to the room.
+
+\textbf{Aquarium.} It has a wooden stand (box + 3 doors + handles), a sand box, rock spheres, a driftwood
+cylinder, water plants (cross cards that sway), a hood and a light strip. The water and glass are
+transparent boxes. Each fish is a scaled sphere body $(0.45s,0.75s,1.25s)$, a cone tail that wiggles
+with $R_y(25^\circ\sin 9t)$, a wedge fin and two sphere eyes. Fish swim on ellipses
+$x = r_x\cos\varphi,\ z = r_z\sin\varphi$, and face their direction of motion,
+$yaw=\operatorname{atan2}(\Delta x,\Delta z)$. ``Feed the fish'' drops food and the fish rise to it.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.24\linewidth}\includegraphics[width=\linewidth]{obj_coffee}\caption{Coffee machine}\end{subfigure}
+\begin{subfigure}{0.24\linewidth}\includegraphics[width=\linewidth]{obj_tv}\caption{TV}\end{subfigure}
+\begin{subfigure}{0.48\linewidth}\includegraphics[width=\linewidth]{obj_aquarium}\caption{Aquarium}\end{subfigure}
+\caption{Appliances, rendered alone in a ``studio''.}
+\end{figure}
+
+% -----------------------------------------------------------------------------
+\subsection{Furniture and lamps}
+\begin{table}[H]
+\centering\small
+\caption{Furniture made from basic shapes}
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Object & Construction \\ \midrule
+Sofa ($n$ seats) & width $W=0.72n+0.32$; base box, back box; per seat: cushion box + front roll cylinder ($R_z 90^\circ$) + back cushion box tilted $R_x(-10^\circ)$; two arms (box + rolled cylinder $R_x 90^\circ$); 4 wooden leg cylinders; throw pillows (boxes rotated in 3 axes) \\
+Armchair & the same function with $n=1$ \\
+Coffee table & top and shelf boxes, 4 metal leg boxes, magazines (thin boxes), fruit bowl (hemisphere with negative $y$ scale) + spheres \\
+Bookshelf & 2 side boards, top, back, plinth, 5 shelves; books are boxes with the procedural \emph{books} texture (mesh UVs). Each shelf uses two blocks of different widths, one turned $180^\circ$, so the pattern does not repeat \\
+Wall clock & torus rim ($R_x 90^\circ$), face cylinder, 12 ticks (each in a node $R_z(-30^\circ i)$), hands $R_z(-30^\circ h)$ and $R_z(-6^\circ m)$. The hands show the \emph{in-game} time \\
+Pendant lamp & ceiling disc, cord cylinder, shade (truncated cone), diffuser disc, bulb sphere (emissive when on) \\
+Street lamp & concrete base cylinder, tapered pole (truncated cone), arm cylinder $R_x 90^\circ$, head (tapered box $R_x 180^\circ$), glowing lens \\
+Others & table lamps, floor lamp, potted plants (3 kinds), counters with cabinets, water cooler, benches, bins, stanchions with ropes, security cameras (they pan), smoke detectors, roof AC units, sign boards \\
+\bottomrule
+\end{tabularx}
+\end{table}
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{stages_sofa}\caption{Sofa build stages.}\end{figure}
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.24\linewidth}\includegraphics[width=\linewidth]{obj_bookshelf}\caption{Bookshelf}\end{subfigure}
+\begin{subfigure}{0.24\linewidth}\includegraphics[width=\linewidth]{obj_armchair}\caption{Armchair}\end{subfigure}
+\begin{subfigure}{0.24\linewidth}\includegraphics[width=\linewidth]{obj_clock}\caption{Wall clock}\end{subfigure}
+\begin{subfigure}{0.24\linewidth}\includegraphics[width=\linewidth]{obj_pendant}\caption{Pendant lamp}\end{subfigure}
+\caption{Furniture and lamps.}
+\end{figure}
+
+% -----------------------------------------------------------------------------
+\subsection{People}
+A person has 41 parts (\Cref{fig:humangraph}). Different looks come from a random seed: skin, hair
+colour and style (short, long, bun, cap), shirt, trousers, shoes, height ($0.92$--$1.06$), body width,
+long or short sleeves, glasses, and a long kurta-style skirt.
+
+\begin{table}[H]
+\centering\small
+\caption{Body parts of a person (local sizes in metres, $w$ = width factor)}
+\begin{tabularx}{\linewidth}{@{}P{3.2cm}P{3.1cm}P{3.1cm}X@{}}
+\toprule
+Part & Shape & Size & Placement \\ \midrule
+Pelvis + belt & cylinder, cube & $(.34w,.18,.21)$ & pelvis node at $y = 0.93 - drop + bob$ \\
+Thigh, knee, shin & cylinder, sphere, cylinder & $(.15w,.45,.16)$, $(.12w,.42,.13)$ & hip joint $(\pm.095w,-.03,0)$, $R_x(\theta_{thigh})$; knee joint $T(0,-.45,0)R_x(\theta_{knee})$ \\
+Shoe + sole & cubes & $(.11,.07,.26)$ & ankle node, toes point $+z$ \\
+Abdomen, chest & cylinder, sphere & $(.31w,.26,.20)$, $(.40w,.36,.25)$ & torso node $T(0,.08,0)R_x(lean)$ \\
+Upper chest & tapered box $R_z(180^\circ)$ & $(.38w,.18,.22)$ & upside down, so it is wide at the shoulders \\
+Shoulders, collar & spheres, torus & & $(\pm.19w,.42,0)$ \\
+Head & sphere & $(.20,.245,.215)$ & neck node, then $R_y(\text{headYaw})R_x(\text{headPitch})$ \\
+Face & spheres + boxes & & eyes (white + pupil), nose, ears, eyebrows, mouth; glasses = 2 tori \\
+Hair & hemisphere (+ sphere / box) & & 4 styles \\
+Upper arm, forearm, hand & cylinder, cylinder, sphere & $(.095,.29,.095)$, $(.08,.26,.08)$ & shoulder $R_x(\theta_s)R_z(\pm out)$, elbow $R_x(\theta_e)$; a held item (can, cup, snack, phone) is a child of the right hand \\
+\bottomrule
+\end{tabularx}
+\end{table}
+\paragraph{Animation.} Only the joint angles change. For walking with phase $\varphi$:
+\[
+\theta_{thigh}^{L,R} = \mp 26^\circ\sin\varphi,\quad
+\theta_{knee}^{L} = 38^\circ\max(0,\cos\varphi)+4^\circ,\quad
+\theta_{shoulder}^{L,R} = \pm22^\circ\sin\varphi,\quad
+bob = 0.035\,(1-|\sin\varphi|).
+\]
+Sitting lowers the pelvis by $0.44$ m, turns the thighs $-88^\circ$ and bends the knees $88^\circ$. Driving,
+pressing buttons and bending down are other fixed poses. Changes between poses are smooth, because
+every angle is blended linearly over $0.35$ s.
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{stages_human}\caption{Person build stages.}\end{figure}
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.3\linewidth}\includegraphics[width=\linewidth]{obj_human}\caption{Standing, holding a cup}\end{subfigure}
+\begin{subfigure}{0.3\linewidth}\includegraphics[width=\linewidth]{obj_human_walk}\caption{Walking pose}\end{subfigure}
+\begin{subfigure}{0.3\linewidth}\includegraphics[width=\linewidth]{obj_human_sit}\caption{Sitting on a chair}\end{subfigure}
+\caption{Poses of the same hierarchical model.}
+\end{figure}
+
+% -----------------------------------------------------------------------------
+\subsection{Cars}
+There are three types (sedan $4.4\times1.78\times1.42$ m, SUV and hatchback) in nine paint colours.
+\begin{table}[H]
+\centering\small
+\caption{Parts of a car}
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Part & Construction \\ \midrule
+Body & big box, rounded nose (cylinder lying along $x$, $R_z 90^\circ$), bumpers, underbody \\
+Bonnet & wedge that slopes down towards the front; boot lid box \\
+Cabin & tapered box made of tinted \emph{transparent} glass, so the driver is visible; roof box; SUV uses an upright glass box + roof rails \\
+Pillars & thin boxes stretched between two points by a ``beam'' helper: the box's $y$ axis is turned onto $\mathbf{b}-\mathbf{a}$ with the rotation $\mathbf{y}\times\mathbf{d}$ by $\operatorname{atan2}(|\mathbf{y}\times\mathbf{d}|,\ \mathbf{y}\cdot\mathbf{d})$ \\
+Interior & seats, rear bench, dashboard, steering wheel (torus $R_x 70^\circ$) \\
+Lights & head lights (emissive at night + real spot lights), tail and brake lights, reverse lights, blinking orange indicators \\
+Wheels (4) & dark wheel well, tyre cylinder $(2R,.22,2R)$ $R_z90^\circ$, chrome rim, 3 spokes, hub; node $R_y(steer)$ for the front wheels, then $R_x(spin)$ \\
+Driver door & child node $T(hinge)\cdot R_y(\theta_{door})$; it opens to $70^\circ$ when the NPC gets in or out \\
+\bottomrule
+\end{tabularx}
+\end{table}
+The wheels turn with $\theta_{spin} \mathrel{+}= \Delta s / R$, where $\Delta s$ is the distance driven. The
+steering angle follows the car's turning rate, $\delta = \arctan\!\big(L_{wb}\,\Delta\psi/\Delta s\big)$, where
+$L_{wb}$ is the wheel base and $\Delta\psi$ is the change of heading.
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{stages_sedan}\caption{Sedan build stages (the driver is a person model sitting in the drive pose).}\end{figure}
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{obj_sedan}\caption{Sedan, door open}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{obj_suv}\caption{SUV}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{obj_hatchback}\caption{Hatchback}\end{subfigure}
+\caption{The three car types.}
+\end{figure}
+
+% -----------------------------------------------------------------------------
+\subsection{The building}
+Walls are made by one function, \texttt{buildWall()}. It takes a straight wall and a list of
+openings (doors and windows), and splits the wall into pieces (\Cref{fig:wall}):
+\begin{enumerate}
+  \item full-height pieces between the openings,
+  \item for each opening, a piece \emph{below} it (a window sill wall) and a piece \emph{above} it (lintel),
+  \item for windows: a transparent glass pane, an aluminium frame (4 bars + a middle bar) and a marble sill,
+  \item for doors: frame trims.
+\end{enumerate}
+Each piece has two half-thickness layers. The outside layer uses \emph{brick}, and the inside layer uses
+the room's \emph{plaster} colour (beige lounge, light blue ATM room, sage green library). Wooden
+skirting boards run along the inside floor line. Floors are tiles (lounge), carpet (ATM room) and wood
+(library). The ceilings and roof (with parapet, AC units and the sign) are drawn per frame, so the
+roof can be hidden in the cut-away view. The automatic sliding glass doors slide sideways by
+$x = \pm(0.6 + 1.15\cdot open)$ while someone stands within $2.2\times2.8$ m of them. While they are
+closed they also block the player.
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=0.75cm,y=0.75cm]
+\draw[fill=orange!30] (0,0) rectangle (2,3.6); \node at (1,1.8) {1};
+\draw[fill=orange!30] (2,0) rectangle (6,0.8); \node at (4,0.4) {2};
+\draw[fill=cyan!15] (2,0.8) rectangle (6,2.8); \node at (4,1.8) {glass + frame};
+\draw[fill=orange!30] (2,2.8) rectangle (6,3.6); \node at (4,3.2) {3};
+\draw[fill=orange!30] (6,0) rectangle (8,3.6); \node at (7,1.8) {1};
+\draw[fill=orange!30] (8,2.6) rectangle (10.4,3.6); \node at (9.2,3.1) {3};
+\draw[dashed] (8,0) rectangle (10.4,2.6); \node at (9.2,1.3) {door};
+\draw[fill=orange!30] (10.4,0) rectangle (12,3.6); \node at (11.2,1.8) {1};
+\draw[<->] (0,-0.4) -- (12,-0.4) node[midway,below,font=\footnotesize]{wall length};
+\end{tikzpicture}
+\caption{A wall with one window and one door: (1) full pieces, (2) below the window, (3) above the opening.}\label{fig:wall}
+\end{figure}
+
+% -----------------------------------------------------------------------------
+\subsection{The jungle}
+\textbf{Tree species.}
+\begin{itemize}
+  \item \emph{Rainforest tree}: low-poly cylinder trunk (6.5--9 m), 4 \textbf{buttress roots}
+        (wedges rotated $R_y(90^\circ i)$), 3 branches (cylinders in nodes $R_y(yaw)R_x(45$--$60^\circ)$),
+        and an irregular crown of 6--8 foliage blobs (scaled low spheres with a leaf texture),
+        each covered by 2 alpha-tested \textbf{leaf cards}. Some branches carry hanging vines.
+  \item \emph{Coconut palm}: a chain of 7 trunk segments. Each segment is a child of the previous
+        one with an extra $R_x(3$--$7^\circ)$, so the trunk bends smoothly. 9 fronds, each made of two
+        quads (the second is a child of the first and droops by another $30$--$45^\circ$), and 4 coconuts.
+  \item \emph{Emergent giant}: a 14--18 m trunk, 5 large buttresses, 4 branches and a wide layered crown.
+  \item \emph{Bamboo clump}: 9--15 tilted culms (thin cylinders) with node rings and leaf cards.
+  \item \emph{Banana plant}: 1--3 pseudo-stems with 5--8 long leaves (spheres flattened to
+        $(0.55,0.04,1.9)$), sometimes with a banana bunch.
+  \item \emph{Undergrowth}: bushes (blobs + leaf cards, some with flowers), ferns (5 arched frond quads +
+        a cross card), grass tufts and flower cards, rocks (1--3 rotated, squashed low spheres with a rock
+        texture) and fallen logs (horizontal cylinder + moss blobs + mushrooms made of a cylinder and a hemisphere).
+\end{itemize}
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{stages_tree}\caption{Rainforest tree build stages: trunk, buttress roots, branches, then crown blobs and leaf cards.}\end{figure}
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{stages_palm}\caption{Palm build stages: the chained trunk segments bend a little more at each joint.}\end{figure}
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{obj_bamboo}\caption{Bamboo}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{obj_banana}\caption{Banana plant}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{obj_undergrowth}\caption{Bush, fern, rock, log}\end{subfigure}
+\caption{More plants.}
+\end{figure}
+
+\textbf{Placement.} The world ($280\times280$ m) is covered with a \emph{jittered grid} of 6.6 m cells.
+Each cell gets one random point. Points inside the cleared area (building, lot and road with a margin)
+are skipped. A random number then picks the species: 40\% rainforest tree, 18\% palm, 7\% giant,
+8\% bamboo, 11\% banana, 8\% bush, and 8\% nothing. Every cell also gets 1--5 ferns or bushes and
+4--12 grass or flower tufts (more at the edge of the clearing). There is a 12\% chance of a rock and a
+5\% chance of a log. In total the jungle has \statJungleTrees\ broad-leaf trees, \statPalms\ palms,
+\statBamboo\ bamboo clumps, \statBushes\ bushes, \statFerns\ ferns, \statGrass\ grass tufts,
+\statRocks\ rocks and \statLogs\ logs. Every trunk also gets a circle collider.
+
+\textbf{Terrain.} The ground is one displaced grid. It is flat in the clearing and along the road,
+and becomes gently hilly further away:
+\begin{align*}
+H(x,z) &= 14\,\big(\mathrm{fbm}(0.018x,\,0.018z)-0.45\big) + 1.2\,\mathrm{fbm}(0.07x,\,0.07z) \\
+h(x,z) &= \max\!\Big(-1.5,\ H(x,z)\cdot \mathrm{smoothstep}(0,30,d)\cdot \mathrm{smoothstep}\big(5,14,|z-z_{road}(x)|\big)\Big)
+\end{align*}
+Here $d$ is the distance outside the clearing. The road is straight through the lot
+($z=16$) and curves in the jungle with $z_{road}(x)=16 + 7\sin\!\big(0.035(|x|-30)\big)\,\mathrm{sign}(x)$.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{jungle_inside}\caption{Inside the jungle}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{aerial_jungle}\caption{From above}\end{subfigure}
+\caption{The procedural jungle.}
+\end{figure}
+
+% =============================================================================
+\section{Lighting}
+\subsection{Lighting model}
+All lighting is computed per pixel in the fragment shader with the Blinn--Phong model. For one light
+with direction $\mathbf{L}$, normal $\mathbf{N}$, view direction $\mathbf{V}$ and half vector
+$\mathbf{H} = \operatorname{normalize}(\mathbf{L}+\mathbf{V})$:
+\[
+C = \underbrace{\text{mix}(A_{ground},A_{sky},\tfrac{N_y+1}{2})\,k_d}_{\text{ambient}}
+ + \sum_{lights}\Big(k_d\max(\mathbf{N}\!\cdot\!\mathbf{L},0) + k_s(\mathbf{N}\!\cdot\!\mathbf{H})^{n}\Big)\,I\,a(d)\,c\,s
+ + E .
+\]
+Here $k_d$ is the surface colour (times the texture), $k_s$ is the specular strength, $n$ is the
+shininess, $I$ is the light colour times its intensity, $a(d)$ is the attenuation, $c$ is the spot cone
+factor, $s$ is the shadow factor and $E$ is the emission (screens, LEDs, bulbs). The ambient part uses
+\emph{hemisphere} lighting: surfaces facing up get the sky colour and surfaces facing down get the
+ground colour. Inside the building the ambient part is multiplied by 0.45, because the roof blocks
+the sky. Leaves and grass use soft ``wrap'' lighting, $0.6\,\mathbf{N}\!\cdot\!\mathbf{L}+0.4$, and are
+lit from both sides.
+
+\textbf{Attenuation} uses a smooth window, so every light really ends at its range $r$ and can be skipped
+beyond it:
+\[
+a(d) = \frac{\big[\mathrm{clamp}(1-(d/r)^4,\,0,\,1)\big]^2}{1+d^2},\qquad
+c = \mathrm{smoothstep}\big(\cos\theta_{out},\ \cos\theta_{in},\ -\mathbf{L}\cdot\mathbf{D}\big)\ \text{for spot lights.}
+\]
+
+\subsection{Light types}
+\begin{table}[H]
+\centering\small
+\caption{Light types in the scene}
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Type & Where \\ \midrule
+Directional & the \textbf{sun} by day and the \textbf{moon} by night (one light that follows the clock) \\
+Point & lounge pendant bulbs (4), library pendants (3), ATM tube lights (2), vending machine interiors (3), ATM screen, aquarium hood, TV glow (flickers with the picture), 8 parking lamps and road lamps \\
+Spot & recessed downlights over the vending machines, TV wall and coffee counter, the reading floor lamp, porch lights, \textbf{car headlights} (moving spot lights) \\
+Emissive & every lamp model has a glowing bulb or tube when it is on, plus LEDs, screens, signs, fireflies and the marquee \\
+Ambient & hemisphere sky / ground light that changes with the time of day \\
+\bottomrule
+\end{tabularx}
+\end{table}
+Every light belongs to a \emph{group}: lounge, spots, ATM room, library, outdoor or machines. Groups can
+be switched with the F1--F4 keys or with the real \textbf{light switches} on the walls, which you can look
+at and press. The lamp models check their group, so a bulb only glows when its light is on. The
+outdoor group switches on automatically at dusk.
+
+\subsection{Choosing lights every frame}
+The shader accepts up to 16 point and 8 spot lights. Every frame the light manager:
+\begin{enumerate}
+  \item drops lights that are switched off, too far away ($>45$ m beyond their range), or whose sphere of
+        influence is outside the camera frustum,
+  \item keeps the closest ones,
+  \item sorts them by \textbf{region}: ATM room, lounge, library or outdoors.
+\end{enumerate}
+Each pixel works out its own region from its position and loops \emph{only} over the lights of that
+region. This has two benefits. Light no longer leaks through walls into the next room, and pixels do
+much less work. In the lounge view this change raised the frame rate from 53 to 63 FPS.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{lounge_night}\caption{Night, lamps on}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{lounge_night_lamps_off}\caption{Night, lamps switched off (only machine glow and moonlight)}\end{subfigure}
+\caption{The same room with and without its bulbs and spot lights.}
+\end{figure}
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{library_night}\caption{Library at night: warm pendants and a reading lamp}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{parking_night}\caption{Sodium street lamps and car lights}\end{subfigure}
+\caption{Different kinds of light at night.}
+\end{figure}
+
+% =============================================================================
+\section{Day and Night}
+A 24-hour clock runs at 1 game hour per 20 s by default (keys change the speed, pause it, or jump
+between day and night). The sun's direction comes from the hour:
+\[
+a=\frac{hour-6}{12}\pi,\qquad \mathbf{s}=\operatorname{normalize}(0.95\cos a,\ \sin a,\ 0.42),\qquad
+\mathbf{m} = \operatorname{normalize}(-0.8\,s_x,\ -s_y,\ 0.3).
+\]
+So the sun rises in the east ($+x$) at 6:00, is highest at noon and sets at 18:00, and the moon is on
+the opposite side. All other values are blended from the sun height $s_y$: the sky zenith and horizon
+colours (with an orange glow near sunrise and sunset), the sun colour (warm when low), the ambient
+light, the fog colour and density, the cloud colour and the exposure. The night factor
+$1-\mathrm{smoothstep}(-0.14,\,0.10,\,s_y)$ shows the stars and moon, turns on the street lamps and car
+headlights, and wakes up the fireflies.
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{ext_sunrise}\caption{Sunrise 6:18}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{ext_day}\caption{Day 10:30}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{ext_sunset}\caption{Sunset 17:36}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{ext_night}\caption{Night 21:00}\end{subfigure}
+\caption{The same view at four times of day.}
+\end{figure}
+
+% =============================================================================
+\section{Textures}
+\subsection{Procedural textures}
+All 25 textures are created at start-up from \emph{value noise}. Random values are placed on a grid and
+smoothly interpolated between grid points. Several octaves are then added together (fractal
+Brownian motion):
+\[
+\mathrm{fbm}(\mathbf{p}) = \frac{\sum_{i=0}^{k-1} 0.5^{i}\,\mathrm{noise}(2^{i}\mathbf{p})}{\sum_{i=0}^{k-1}0.5^{i}} .
+\]
+The noise wraps around at the texture border, so the textures tile without seams. Patterns are built
+on top of it: rows of bricks with mortar, wooden planks with grain $\sin(6v+\text{noise})$, tiles with
+grout, marble veins, woven fabric, bark ridges, and also \emph{cut-out} textures (leaves, grass blades,
+fern, palm frond, flowers, vine) whose alpha channel marks where the leaf is.
+
+\begin{figure}[H]\centering\includegraphics[width=0.92\linewidth]{textures}\caption{All procedural textures ($*$ = alpha cut-out, light grey shows the transparent part).}\end{figure}
+
+\subsection{How textures are applied}
+\begin{itemize}
+  \item All layers live in one \texttt{GL\_TEXTURE\_2D\_ARRAY} ($256\times256$, mip-maps, $4\times$
+        anisotropic filtering). Each instance only stores a layer number, so a texture change never
+        breaks an instanced draw call.
+  \item A texture stores a \emph{detail} value. The final colour is
+        $k_d = \text{colour}\times 2\cdot\text{texel}$, so the same brick texture works for any brick colour.
+  \item \textbf{Object-space box mapping}: the shader picks the plane of the largest normal component
+        and uses the local position multiplied by the object's scale:
+        $(u,v) = (x,z)$, $(z,y)$ or $(x,y)$ times the repeats per metre. A 10 m wall therefore shows ten
+        times more bricks than a 1 m box, without any UV work.
+  \item Cut-out cards use their mesh UVs, and pixels with $\alpha<0.5$ are discarded (also in the shadow pass,
+        so leaves cast leaf-shaped shadows).
+  \item The terrain mixes two textures (lawn grass and forest floor) using a large-scale noise and the
+        distance from the clearing.
+\end{itemize}
+
+% =============================================================================
+\section{Shadows}
+Shadows use \textbf{shadow mapping} (\Cref{fig:shadowidea}).
+\begin{enumerate}
+  \item \textbf{Depth pass}: the scene is drawn from the sun with an orthographic camera
+        ($\pm42$ m box around the player, 2048$\times$2048 depth texture). Only depth is stored.
+  \item \textbf{Main pass}: every pixel is moved into the light's space,
+        $\mathbf{p}_{L} = P_L V_L\,(\mathbf{p}+0.05\,\mathbf{N})$. If its depth is larger than the stored depth,
+        it is in shadow.
+\end{enumerate}
+To make the shadows look good:
+\begin{itemize}
+  \item a slope-scaled bias $0.0006+0.0012(1-\mathbf{N}\cdot\mathbf{L})$, a 5 cm normal offset and a polygon offset
+        in the depth pass remove ``shadow acne'',
+  \item \textbf{PCF}: 5 hardware-compared samples (the centre counts twice) give soft edges,
+  \item the light box moves in whole texel steps, so shadows do not shimmer when the player walks,
+  \item glass, grass and other tiny details do not cast shadows, which saves time.
+\end{itemize}
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.42\linewidth}
+\begin{tikzpicture}[scale=0.85]
+\draw[fill=yellow!60] (0,4.2) circle (0.35) node[right=8pt]{sun};
+\draw[thick,fill=gray!30] (2,0) rectangle (2.8,2);
+\draw[fill=black!15] (2.8,0) -- (4.7,0) -- (2.8,2) -- cycle;
+\draw[dashed] (0.2,3.9) -- (4.7,0);
+\draw[dashed] (0.1,3.9) -- (2.8,2);
+\draw[thick] (-0.5,0) -- (5.5,0);
+\node[font=\footnotesize] at (3.8,-0.35) {in shadow: depth $>$ stored};
+\end{tikzpicture}
+\end{minipage}
+\begin{minipage}{0.4\linewidth}
+\includegraphics[width=\linewidth]{shadow_map}
+\end{minipage}
+\caption{Left: the idea of shadow mapping. Right: the real depth image seen by the sun (darker = closer to the sun). The building, cars and every tree crown are visible.}\label{fig:shadowidea}
+\end{figure}
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{ext_day}\caption{Shadows on}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{ext_day_noshadow}\caption{Shadows off}\end{subfigure}
+\caption{Shadows give the scene depth and show where objects touch the ground.}
+\end{figure}
+
+% =============================================================================
+\section{Sky, Fog, Tone Mapping and Wind}
+\begin{itemize}
+  \item \textbf{Sky}: one full-screen triangle. For each pixel the view ray is rebuilt from the inverse
+        view-projection matrix. The colour is $\text{mix}(horizon, zenith, h^{0.55})$, plus a sun disc
+        ($\max(\mathbf{d}\cdot\mathbf{s},0)^{900}$) with a glow, a moon, twinkling stars (a hash on a
+        3D grid) and moving clouds (4-octave noise projected on a sky plane).
+  \item \textbf{Fog}: $f = 1-e^{-(d\rho)^{1.5}}$ blends to the horizon colour. It hides the end of the world
+        and gives a humid jungle look. The density is higher at night and lower when the camera is high up.
+  \item \textbf{Tone mapping}: $C' = 1-e^{-C\cdot exposure}$ keeps bright lamps from turning flat white.
+        The exposure rises at night, like an eye adapting to the dark.
+  \item \textbf{Wind}: leaves and grass sway in the vertex shader. The offset grows with the height
+        inside the shape: $\Delta x = 0.05\,h\,\min(s_y,2.5)\sin(1.7t+0.35x+0.27z)$.
+        Aquarium plants reuse this as a water current.
+\end{itemize}
+
+% =============================================================================
+\section{Basic Mode versus Enhanced Mode}
+Press \textbf{B} (or click the HUD button) to switch modes. \textbf{T}, \textbf{G} and \textbf{F}
+switch textures, shadows and fog one at a time.
+\begin{table}[H]
+\centering\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Feature & Basic & Enhanced \\ \midrule
+Basic shapes, transformations, all objects & yes & yes \\
+Blinn--Phong lighting with all lights & yes & yes \\
+Procedural textures & -- & yes \\
+Shadow mapping (PCF) & -- & yes \\
+Fog & -- & yes \\
+Sky with sun, clouds, stars & simple gradient & yes \\
+Wind animation & -- & yes \\
+Tone mapping & clamp & exponential \\
+\bottomrule
+\end{tabular}
+\end{table}
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{ext_day_basic}\caption{Basic}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{ext_day}\caption{Enhanced}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{lounge_night_basic}\caption{Basic (interior)}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{ext_day_notex}\caption{Enhanced without textures}\end{subfigure}
+\caption{Basic and Enhanced rendering.}
+\end{figure}
+
+% =============================================================================
+\section{Interaction: Using the Machines}
+\subsection{Look-and-press picking}
+Every button, slot, flap, switch, TV or aquarium registers an \emph{oriented box} (its matrix $M$ and half
+size $\mathbf{h}$) every frame. A ray goes from the camera through the centre of the screen. For each box
+the ray is moved into the box's own space with $M^{-1}$, and the \emph{slab test} is applied on each axis:
+\[
+t_1=\frac{-h_a-o_a}{d_a},\quad t_2=\frac{h_a-o_a}{d_a},\qquad
+t_{near}=\max_a\min(t_1,t_2),\quad t_{far}=\min_a\max(t_1,t_2).
+\]
+The ray hits the box if $t_{near}\le t_{far}$ and $t_{near}$ is within reach (2.4 m). The closest box
+wins. Its prompt is shown under the crosshair (for example ``Insert Tk 10 coin''), and it glows. Pressing
+\textbf{E} or the left mouse button runs its action. As an automatic test, the program aims the camera at
+fourteen different parts and records what it hits (\Cref{lst:probes}). Every part was hit correctly.
+\lstinputlisting[language={},caption={Automatic interaction test (part aimed at $\rightarrow$ prompt found)},label={lst:probes},basicstyle=\ttfamily\scriptsize]{generated/probes.txt}
+
+\subsection{ATM: step by step}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.9cm and 0.45cm,scale=0.86,transform shape,state/.append style={minimum width=2.35cm}]
+\node[state] (w) {WELCOME};
+\node[state,right=of w] (c) {CARD IN};
+\node[state,right=of c] (p) {PIN + ENTER};
+\node[state,right=of p] (v) {VERIFY 1234};
+\node[state,right=of v] (m) {MENU};
+\node[state=blue!8,right=of m] (b) {BALANCE};
+\node[state=red!10,above=0.7cm of p,xshift=1.0cm] (wr) {WRONG PIN};
+\node[state,below=1.3cm of m] (a) {AMOUNT};
+\node[state,below=1.3cm of v] (pr) {PROCESSING};
+\node[state,below=1.3cm of p] (tc) {TAKE CARD};
+\node[state,below=1.3cm of c] (tm) {TAKE CASH};
+\node[state,below=1.3cm of w] (r) {RECEIPT};
+\node[state,below=0.9cm of r] (t) {THANK YOU};
+\draw[arr] (w)--(c); \draw[arr] (c)--(p); \draw[arr] (p)--(v); \draw[arr] (v)--(m);
+\draw[arr] (v) |- (wr); \draw[arr] (wr) -| (p);
+\draw[arr] (m)--node[lbl]{Withdraw}(a); \draw[arr] (m)--(b);
+\draw[arr] (b) |- node[lbl,pos=0.3]{Exit} (a.east);
+\draw[arr] (a)--(pr); \draw[arr] (pr)--(tc); \draw[arr] (tc)--(tm); \draw[arr] (tm)--(r); \draw[arr] (r)--(t);
+\draw[arr] (t.west) -- ++(-0.6,0) |- (w.west);
+\end{tikzpicture}
+\caption{ATM state machine. CANCEL at any step jumps to TAKE CARD. The card is always returned before the cash, like a real ATM.}
+\end{figure}
+The same eight steps are listed in a HUD panel, and the current step is highlighted. Inside the
+machine, the card slides in and out, the PIN appears as stars, the bills slide out of the cash slot and
+the receipt paper curls out of the printer. Taking the cash adds Taka to the player's wallet and takes it
+from the bank balance. That money can then be spent at the vending machines.
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{atm_1_welcome}\caption{1. Insert card}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{atm_2_pin}\caption{2. Enter PIN}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{atm_3_menu}\caption{3. Choose a service}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{atm_4_amount}\caption{4. Choose amount}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{atm_5_processing}\caption{5. Processing}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{atm_6_takecard}\caption{6. Take card}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{atm_7_takecash}\caption{7. Take cash}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{atm_8_receipt}\caption{8. Take receipt}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{atm_9_thanks}\caption{Done}\end{subfigure}
+\caption{A full withdrawal of Tk 1,000, with the step list on the left.}
+\end{figure}
+
+\subsection{Coffee machine and TV}
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{coffee_brewing}\caption{Brewing a cappuccino (stream, rising coffee, steam)}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{coffee_ready}\caption{Ready, take the cup}\end{subfigure}
+\caption{Coffee machine: \texttt{IDLE} $\rightarrow$ \texttt{CUP\_DROP} $\rightarrow$ \texttt{GRINDING} $\rightarrow$ \texttt{BREWING} $\rightarrow$ \texttt{READY}.}
+\end{figure}
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.24\linewidth}\includegraphics[width=\linewidth]{tv_ch1}\caption{News + ticker}\end{subfigure}
+\begin{subfigure}{0.24\linewidth}\includegraphics[width=\linewidth]{tv_ch2}\caption{Nature}\end{subfigure}
+\begin{subfigure}{0.24\linewidth}\includegraphics[width=\linewidth]{tv_ch3}\caption{Live football}\end{subfigure}
+\begin{subfigure}{0.24\linewidth}\includegraphics[width=\linewidth]{tv_ch4}\caption{Weather (game time)}\end{subfigure}
+\caption{The four animated TV channels.}
+\end{figure}
+
+% =============================================================================
+\section{NPC Visitors}
+\subsection{Life of a visitor}
+Visitors can \textbf{only} appear inside a car at the far end of the road. A new car comes every
+8--18 s if there is a free parking spot and the road entrance is clear. At most six visitors are
+active at once.
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.9cm and 1.0cm]
+\node[state] (a) {DRIVE IN\\road path};
+\node[state,right=of a] (b) {WAIT\\for lot};
+\node[state,right=of b] (c) {PARKING\\B\'ezier};
+\node[state,right=of c] (d) {EXIT CAR\\door opens};
+\node[state=yellow!15,below=0.9cm of d] (e) {INSIDE\\walk + activities};
+\node[state,left=of e] (f) {ENTER CAR};
+\node[state,left=of f] (g) {WAIT\\(clear aisle)};
+\node[state,left=of g] (h) {UNPARK\\reverse};
+\node[state,below=0.9cm of h] (i) {DRIVE OUT\\then removed};
+\draw[arr] (a)--(b); \draw[arr] (b)--node[lbl,above=4pt]{token}(c); \draw[arr] (c)--(d); \draw[arr] (d)--(e);
+\draw[arr] (e)--(f); \draw[arr] (f)--(g); \draw[arr] (g)--node[lbl,above=4pt]{token}(h); \draw[arr] (h)--(i);
+\end{tikzpicture}
+\caption{Visitor state machine.}
+\end{figure}
+
+\subsection{Driving and parking}
+Cars follow \emph{paths}: lists of points with the running length $s$. The car's position comes from
+interpolation at $s$, and its heading from the direction of the segment. The road path samples
+$z_{road}(x)$ every 3 m. Parking uses a cubic Bézier curve
+\[
+\mathbf{B}(t) = (1-t)^3\mathbf{P}_0 + 3(1-t)^2t\,\mathbf{P}_1 + 3(1-t)t^2\,\mathbf{P}_2 + t^3\mathbf{P}_3,
+\]
+with $\mathbf{P}_0=(x_s+5,16)$ and $\mathbf{P}_1=(x_s+2.2,16)$ along the aisle, and
+$\mathbf{P}_2=(x_s,z_s\pm2.8)$ and $\mathbf{P}_3=(x_s,z_s)$ in the spot. The tangents at both ends therefore
+match the aisle and the spot, so the turn is smooth. Leaving uses a second curve driven in
+\emph{reverse} (the heading is the motion direction $+180^\circ$, the reverse lights are on), and then
+the car drives forward to the west end of the road.
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=0.55cm,y=-0.55cm]
+\fill[gray!35] (-4,8.6) rectangle (14,23);
+\foreach \x in {-1.5,1.5,4.5,7.5} {\draw[white,thick] (\x,8.9)--(\x,13.5);}
+\draw[white,dashed] (-4,16)--(14,16);
+\draw[very thick,blue] (8,16) .. controls (5.2,16) and (3,13.8) .. (3,11.2);
+\draw[very thick,red,dashed] (3,11.2) .. controls (3,14) and (4.8,16) .. (7.5,16);
+\foreach \p/\n in {{(8,16)}/P_0,{(5.2,16)}/P_1,{(3,13.8)}/P_2,{(3,11.2)}/P_3} {\fill \p circle (2.5pt); \node[font=\scriptsize,above right] at \p {$\n$};}
+\draw[arr,blue] (13,17.2) -- (9,17.2) node[midway,below,font=\scriptsize]{arriving};
+\node[font=\scriptsize,red] at (8.8,13.2) {reverse out};
+\node[font=\scriptsize] at (3,9.6) {spot};
+\end{tikzpicture}
+\caption{Parking (blue, forward) and leaving (red, reverse) curves for one spot.}
+\end{figure}
+
+\textbf{Speed} is limited by the place (9 m/s on the road, 4 m/s in the lot, 1.8 m/s while parking,
+1.3 m/s while reversing) and by the distance $s_{left}$ still to go:
+$v\le\sqrt{2\cdot2.2\cdot s_{left}}+0.25$, so cars brake smoothly. A car stops if another car is less
+than 7.5 m ahead in its lane, or if a person (NPC or player) is less than 5.5 m ahead. Only one car may
+park or unpark at a time: it must hold the ``lot token''. Cars in the aisle wait while the token holder
+moves in front of them, and a car only starts to reverse when the aisle behind it is clear. These two
+rules prevent deadlocks.
+
+\subsection{Walking and activities}
+Inside the building, people walk on a waypoint graph of 18 nodes and 22 edges (doorways, room hubs,
+the queue entrance at the ATM, and so on). The shortest route is found with \textbf{Dijkstra's
+algorithm}, and the route to the car is added at the end. Walking speed is 1.35 m/s, and people wait
+if the player blocks them. Every visitor has a plan of 1--3 activities. Each one \emph{reserves} its
+resource first (a machine, a seat, a reading spot), so two people never use the same thing:
+\begin{itemize}
+  \item \textbf{Vending}: walk to the machine, press the keys (press pose), wait for the drop, bend down,
+        take the item and carry it. This really runs the machine's state machine.
+  \item \textbf{Coffee}: choose a drink, wait, take the cup and carry it.
+  \item \textbf{ATM}: run a complete ATM session. The ATM ``presses its own buttons'' with small pauses,
+        so the screen shows every step.
+  \item \textbf{Sit and watch TV} (7 sofa seats) or \textbf{read} (2 library armchairs) for 12--28 s.
+  \item \textbf{Browse books} or \textbf{watch the fish}.
+\end{itemize}
+\Cref{lst:trace} shows the beginning of a real trace recorded by the program.
+\lstinputlisting[language={},caption={Start of a visitor trace (simulation time, visitor, spot, what it is doing)},label={lst:trace},basicstyle=\ttfamily\scriptsize]{generated/visitor_trace.txt}
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{parking_lot}\caption{Cars parked, a visitor walking to the entrance}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{visitors_inside}\caption{Visitors inside (TV on)}\end{subfigure}
+\caption{NPC visitors.}
+\end{figure}
+
+% =============================================================================
+\section{The Player and the Cameras}\label{sec:camera}
+\begin{itemize}
+  \item \textbf{First person}: the camera is at eye height ($1.62$ m), with mouse look and a small head bob
+        $0.028\sin(2\varphi)$ while walking.
+  \item \textbf{Third person}: the player's own model is visible. The camera sits $3.4$ m behind the head.
+        A ray from the head to the camera is tested against the walls, and the camera moves closer if a wall is in
+        the way.
+  \item \textbf{Free camera}: fly anywhere (W A S D, Space and Ctrl) to inspect the scene, for example
+        with the roof cut-away view.
+  \item \textbf{FOV}: the mouse wheel or $+/-$ changes the vertical field of view from $25^\circ$ to $110^\circ$.
+        This changes the $1/\tan(f/2)$ terms of the projection matrix.
+\end{itemize}
+\textbf{Collision.} The player is a circle with a radius of 0.3 m. For every obstacle box (walls, furniture,
+machines, cars), the circle centre is moved into the box's space, the closest point
+$\mathbf{q}=\mathrm{clamp}(\mathbf{p},-\mathbf{h},\mathbf{h})$ is found, and if
+$|\mathbf{p}-\mathbf{q}|<r$ the circle is pushed out along $\mathbf{p}-\mathbf{q}$ (three passes).
+Tree trunks and people are circles. Gravity and jumping use $v_y \mathrel{-}= 12\,\Delta t$ on top of the terrain height.
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{third_person}\caption{Third person}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{cutaway_night}\caption{Free camera, roof cut-away, night}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{fov_35}\caption{FOV 35$^\circ$}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{fov_70}\caption{FOV 70$^\circ$}\end{subfigure}
+\begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{fov_100}\caption{FOV 100$^\circ$}\end{subfigure}
+\caption{Camera modes and field of view.}
+\end{figure}
+
+% =============================================================================
+\section{Performance on a Weak GPU}
+\subsection{Techniques}
+\begin{itemize}
+  \item \textbf{Instanced drawing}: all copies of one basic shape are drawn with one
+        \texttt{glDrawElementsInstanced} call. Each instance carries 37 floats (model matrix 16, normal matrix
+        9, colour and alpha 4, emission and texture layer 4, specular, shininess, texture scale and flags 4).
+  \item \textbf{Static world in chunks}: \statStaticInstances\ shapes that never move are collected once
+        (in \statBuildSeconds\ s) into \statChunks\ chunks of $32\times32$ m, each with its own GPU buffer.
+  \item \textbf{Culling}: a chunk is skipped if its bounding box is outside the view frustum (6 planes taken
+        from the view-projection matrix) or more than 165 m away. Small things have shorter ranges:
+        grass and flowers 45 m, and bushes, ferns and leaf cards 85 m.
+  \item \textbf{Shadow pass} only draws chunks inside the light's box, and skips grass and glass.
+  \item \textbf{Per-room light lists} and frustum culling of lights (see the Lighting section).
+  \item \textbf{Moving objects} are written into streaming buffers once per frame. Transparent objects are
+        sorted from back to front.
+  \item \textbf{Frame cap}: after each frame the program sleeps until $1/cap - 1.5$ ms and then waits the
+        last moment in a loop (with a 1 ms Windows timer resolution). This gives a very steady 60 or 30 FPS
+        and keeps the laptop cool.
+  \item \textbf{Low mode} (\texttt{--low}): a 1024 shadow map, fewer plants, fewer visitors and no MSAA.
+\end{itemize}
+
+\subsection{Measured speed}
+The program measures itself (\texttt{--shots} mode, with no frame cap, 60 frames per view, 1280$\times$720,
+4$\times$MSAA, Intel Iris Xe). The triangle count includes the shadow pass.
+\begin{table}[H]
+\centering\small
+\caption{Frame time without the cap}
+\input{generated/bench_table.tex}
+\end{table}
+Every view runs faster than 60 FPS even in Enhanced mode, so the 60 FPS cap always holds. During
+development, three optimisations made the biggest difference: per-room light lists, larger chunks
+(fewer draw calls) and frustum culling of lights. Together they raised the slowest view from 37 to
+over 60 FPS.
+
+% =============================================================================
+\section{Controls}
+\begin{longtable}{@{}ll@{}}
+\toprule
+Key & Action \\ \midrule
+W A S D, Shift, Space & move, run, jump \\
+Mouse & look around \\
+E / left click & use the part in the crosshair \\
+V & first person $\rightarrow$ third person $\rightarrow$ free camera \\
+Mouse wheel, + / $-$ & change the field of view \\
+B & \textbf{Basic $\leftrightarrow$ Enhanced} \\
+T / G / F & textures / shadows / fog \\
+N, [ ], M & day $\leftrightarrow$ night, time speed, pause time \\
+R & roof cut-away \\
+L & frame cap 60 $\leftrightarrow$ 30 \\
+K & call a visitor car now \\
+F1--F4 & light groups (lounge, spots, ATM + library, outdoor) \\
+F5, F12 & hide HUD, save screenshot \\
+Alt & free the mouse to click the HUD buttons \\
+H, Esc & help, quit \\
+\bottomrule
+\end{longtable}
+\textbf{Vending machine:} insert money, type a code (row letter + column number, for example \texttt{B2}), press
+OK, push the flap, take the change. \textbf{ATM:} insert the card, PIN \texttt{1234}, use the side keys.
+
+% =============================================================================
+\section{More Screenshots}
+\shot{lounge_day}{The main lounge by day: sofas, TV wall with wooden slats, coffee counter, three vending machines, the ATM room on the left and the library on the right.}
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{atm_room}\caption{ATM room with queue stanchions}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{library_day}\caption{Library}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{aquarium}\caption{Aquarium}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{vending_row}\caption{The three vending machines (a visitor is buying)}\end{subfigure}
+\caption{The three rooms.}
+\end{figure}
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{cutaway_day}\caption{Cut-away by day}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{aerial_day}\caption{Aerial view}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{road_day}\caption{Road through the jungle}\end{subfigure}
+\begin{subfigure}{0.49\linewidth}\includegraphics[width=\linewidth]{road_night}\caption{The same road at night}\end{subfigure}
+\caption{Outside views.}
+\end{figure}
+
+% =============================================================================
+\section{Challenges and Solutions}
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Problem & Solution \\ \midrule
+Thousands of shapes made the GPU slow & instancing, a static world in chunks, culling and LOD distances \\
+Many lights per pixel were costly & per-room light regions and frustum culling of lights \\
+Light leaked through walls & each room only uses its own lights \\
+Shadow acne and shimmering & slope bias, normal offset, polygon offset, light box snapped to texels \\
+Trees looked like ``mushrooms'' & irregular crowns made of many blobs plus alpha-tested leaf cards \\
+Text on machine screens & one GDI font atlas, and text quads laid on a canvas in 3D \\
+Cars blocking each other in the lot & one ``lot token'' for parking or unparking, plus look-ahead braking \\
+The driver's head went through the roof & the seat height was tuned for each car type \\
+Checking that clicks hit the right button & an automatic aim-and-probe test that writes a log \\
+Report screenshots had to stay up to date & a \texttt{--shots} mode renders every figure, table and benchmark \\
+\bottomrule
+\end{tabularx}
+
+% =============================================================================
+\section{Conclusion}
+The old vending machine scene became a complete small world. Three connected rooms hold working
+machines, people arrive by car and behave on their own, the jungle around them is dense, and the
+light changes from morning to night. All of it still follows the main rule of the lab: every object is a
+set of basic shapes placed with translation, rotation and scaling, and parts are organised in parent and
+child nodes. The project also covers the main topics of a graphics course in one program: lighting
+models, light types, textures, shadow mapping, fog, transparency, animation, picking, collision,
+cameras and performance. With instancing, culling and smart light handling, it runs at a steady 60 FPS
+on a laptop with only integrated graphics.
+
+\subsection*{Future work}
+\begin{itemize}
+  \item Shadows from lamps (cube shadow maps), and screen-space ambient occlusion.
+  \item Sound: footsteps, machine beeps, cars, birds and rain.
+  \item Weather (rain and puddles), and visitors talking to each other.
+  \item Let the player drive a car or sit on the sofas.
+\end{itemize}
+
+% =============================================================================
+\begin{thebibliography}{9}
+\bibitem{red} J. Kessenich, G. Sellers, D. Shreiner. \emph{OpenGL Programming Guide}, 9th ed., Addison-Wesley, 2016.
+\bibitem{lo} J. de Vries. \emph{Learn OpenGL}, \url{https://learnopengl.com} (lighting, shadow mapping, instancing).
+\bibitem{hearn} D. Hearn, M. P. Baker, W. Carithers. \emph{Computer Graphics with OpenGL}, 4th ed., Pearson, 2010.
+\bibitem{rtr} T. Akenine-M\"oller, E. Haines, N. Hoffman et al. \emph{Real-Time Rendering}, 4th ed., CRC Press, 2018.
+\bibitem{blinn} J. F. Blinn. Models of light reflection for computer synthesized pictures. \emph{SIGGRAPH}, 1977.
+\bibitem{williams} L. Williams. Casting curved shadows on curved surfaces. \emph{SIGGRAPH}, 1978.
+\bibitem{perlin} K. Perlin. An image synthesizer. \emph{SIGGRAPH}, 1985.
+\bibitem{glfw} GLFW documentation, \url{https://www.glfw.org}; GLAD loader, \url{https://glad.dav1d.de}.
+\end{thebibliography}
+
+\end{document}

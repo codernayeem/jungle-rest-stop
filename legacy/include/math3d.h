@@ -13,6 +13,10 @@ inline float toRadians(float degrees) {
     return degrees * (static_cast<float>(M_PI) / 180.0f);
 }
 
+inline float toDegrees(float radians) {
+    return radians * (180.0f / static_cast<float>(M_PI));
+}
+
 struct Vec2 {
     float x, y;
     Vec2() : x(0), y(0) {}

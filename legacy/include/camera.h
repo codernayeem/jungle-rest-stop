@@ -33,11 +33,11 @@ public:
     int currentPresetIndex;
 
     Camera()
-        : target(Vec3(0.0f, 1.25f, 0.0f)),
-          distance(4.2f),
-          yaw(-45.0f),
-          pitch(14.0f),
-          fov(45.0f),
+        : target(Vec3(0.0f, 2.0f, 0.0f)),
+          distance(18.0f),
+          yaw(-35.0f),
+          pitch(28.0f),
+          fov(50.0f),
           autoRotate(false),
           rotateSpeed(15.0f),
           isDraggingLeft(false),
@@ -73,11 +73,11 @@ public:
         autoRotate = false;
         switch (preset) {
             case PRESET_ROOM_OVERVIEW:
-                target = Vec3(0.0f, 1.25f, 0.0f);
-                distance = 4.2f;
-                yaw = -45.0f;
-                pitch = 14.0f;
-                fov = 45.0f;
+                target = Vec3(0.0f, 2.0f, 0.0f);
+                distance = 18.0f;
+                yaw = -35.0f;
+                pitch = 28.0f;
+                fov = 50.0f;
                 break;
             case PRESET_MACHINE_FRONT:
                 target = Vec3(-0.05f, 1.25f, 0.0f);
@@ -130,6 +130,53 @@ public:
 
     void reset() {
         applyPreset(PRESET_ROOM_OVERVIEW);
+    }
+};
+
+enum CameraMode {
+    MODE_FIRST_PERSON = 0,
+    MODE_FREE_ORBIT = 1
+};
+
+struct Player {
+    Vec3 pos;          // Position at feet (Y = 0 is ground)
+    float eyeHeight;   // 1.65m
+    float yaw;         // Look yaw (degrees), 180 = looking forward into rooms (-Z)
+    float pitch;       // Look pitch (degrees)
+    float velY;        // Vertical velocity for jumping
+    bool isGrounded;
+    float walkSpeed;
+    float jumpSpeed;
+    float gravity;
+
+    Player()
+        : pos(Vec3(0.0f, 0.0f, 3.5f)),
+          eyeHeight(1.65f),
+          yaw(180.0f),
+          pitch(0.0f),
+          velY(0.0f),
+          isGrounded(true),
+          walkSpeed(3.8f),
+          jumpSpeed(5.0f),
+          gravity(13.0f)
+    {}
+
+    Vec3 getEyePos() const {
+        return Vec3(pos.x, pos.y + eyeHeight, pos.z);
+    }
+
+    Vec3 getLookDir() const {
+        float rYaw = toRadians(yaw);
+        float rPitch = toRadians(pitch);
+        float x = std::sin(rYaw) * std::cos(rPitch);
+        float y = std::sin(rPitch);
+        float z = -std::cos(rYaw) * std::cos(rPitch);
+        return normalize(Vec3(x, y, z));
+    }
+
+    Mat4 getViewMatrix() const {
+        Vec3 eye = getEyePos();
+        return lookAt(eye, eye + getLookDir(), Vec3(0.0f, 1.0f, 0.0f));
     }
 };
 

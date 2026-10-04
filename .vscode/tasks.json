@@ -3,31 +3,13 @@
     "tasks": [
         {
             "type": "shell",
-            "label": "Build OpenGL Project",
-            "command": "g++",
-            "args": [
-                "-std=c++17",
-                "src/main.cpp",
-                "src/glad.c",
-                "-Iinclude",
-                "-Llib",
-                "-lglfw3",
-                "-lopengl32",
-                "-lgdi32",
-                "-o",
-                "main.exe"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "problemMatcher": [
-                "$gcc"
-            ],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "detail": "Compile OpenGL project with g++"
+            "label": "Build Jungle Rest Stop",
+            "command": "cmd",
+            "args": ["/c", "run.bat"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": ["$gcc"],
+            "group": { "kind": "build", "isDefault": true },
+            "detail": "Compile every source file in src/ and run main.exe"
         }
     ]
 }
