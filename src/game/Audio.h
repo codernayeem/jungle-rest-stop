@@ -8,6 +8,7 @@
 // =============================================================================
 #pragma once
 #include "../core/Math3D.h"
+#include <string>
 
 enum Sound {
     SND_CLICK,      // any button / switch
@@ -35,4 +36,9 @@ void playAt(Sound s, const Vec3& pos, float volume = 1.0f);   // quieter with di
 void setAmbience(float dayLevel, float nightLevel);
 void toggleMute();
 bool muted();
+// video mode: no sound card; every sound that would play is recorded with its time
+void startRecording();
+void recordFrame(float seconds);          // advance the recording clock by one video frame
+void stopRecording(bool keep);            // keep = false: ignore events (fast-forward between shots)
+bool writeRecording(const std::string& path);
 }  // namespace Audio

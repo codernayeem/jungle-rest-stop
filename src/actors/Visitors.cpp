@@ -740,6 +740,22 @@ int VisitorSystem::carsParked() const {
     return n;
 }
 
+VisitorSystem::Info VisitorSystem::info(int i) const {
+    Info r;
+    if (i < 0 || i >= (int)m_vis.size() || !m_vis[i].active) return r;
+    const Visitor& v = m_vis[i];
+    r.active = true;
+    r.inCar = v.inCar;
+    r.state = (int)v.state;
+    r.actStage = v.actStage;
+    r.actT = v.actT;
+    r.pos = v.pos;
+    r.yaw = v.yaw;
+    r.carPos = v.carPos;
+    r.carYaw = v.carYaw;
+    return r;
+}
+
 const char* VisitorSystem::describe(int i) const {
     if (i < 0 || i >= (int)m_vis.size() || !m_vis[i].active) return "";
     const Visitor& v = m_vis[i];

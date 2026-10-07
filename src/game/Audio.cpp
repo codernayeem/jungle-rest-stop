@@ -12,6 +12,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <algorithm>
 #include <vector>
 
 namespace Audio {
@@ -34,6 +35,13 @@ HWAVEOUT g_out = nullptr;
 Vec3 g_listener;
 float g_dayLevel = 0, g_nightLevel = 0;
 size_t g_dayPos = 0, g_nightPos = 0;
+// recording (video mode)
+bool g_loaded = false, g_recording = false, g_recOn = false;
+double g_recTime = 0;
+struct RecEvent { double t; int snd; float vol; };
+std::vector<RecEvent> g_events;
+std::vector<float> g_recDay, g_recNight;   // background level per video frame
+float g_frameLen = 1.0f / 30.0f;
 
 // ---------------------------------------------------------------- WAV loading
 // Reads a 16-bit PCM WAV file (mono or stereo) into floats in [-1, 1].
@@ -140,6 +148,7 @@ void threadMain() {
 
 bool init() {
     loadAll();
+    g_loaded = true;
     WAVEFORMATEX fmt = {};
     fmt.wFormatTag = WAVE_FORMAT_PCM;
     fmt.nChannels = 1;
@@ -167,6 +176,10 @@ void shutdown() {
 void setListener(const Vec3& p) { g_listener = p; }
 
 void play(Sound s, float volume) {
+    if (g_recording) {
+        if (g_recOn && !g_snd[s].empty()) g_events.push_back({g_recTime, (int)s, volume});
+        return;
+    }
     if (!g_out || g_snd[s].empty()) return;
     std::lock_guard<std::mutex> lk(g_lock);
     if (g_voices.size() < 16) g_voices.push_back({&g_snd[s], 0, volume});
@@ -185,6 +198,53 @@ void setAmbience(float day, float night) {
 }
 
 void toggleMute() { g_mute = !g_mute; }
+
+void startRecording() {
+    if (!g_loaded) { loadAll(); g_loaded = true; }
+    g_recording = true;
+    g_recOn = false;
+    g_recTime = 0;
+    g_events.clear();
+    g_recDay.clear();
+    g_recNight.clear();
+}
+
+void recordFrame(float seconds) {
+    g_recOn = true;
+    g_frameLen = seconds;
+    g_recDay.push_back(g_dayLevel);
+    g_recNight.push_back(g_nightLevel);
+    g_recTime += seconds;
+}
+
+void stopRecording(bool keep) { g_recOn = keep; }
+
+bool writeRecording(const std::string& path) {
+    size_t n = (size_t)(g_recTime * RATE) + RATE;   // one extra second for sounds that ring out
+    std::vector<float> mix(n, 0.0f);
+    for (size_t i = 0; i < n; ++i) {   // background, level taken from the video frame
+        size_t f = std::min(g_recDay.size() - 1, (size_t)(i / (g_frameLen * RATE)));
+        float d = g_recDay.empty() ? 0.0f : g_recDay[f], ng = g_recNight.empty() ? 0.0f : g_recNight[f];
+        mix[i] += g_day[i % g_day.size()] * d + g_night[i % g_night.size()] * ng;
+    }
+    for (const auto& e : g_events) {
+        size_t s0 = (size_t)(e.t * RATE);
+        const auto& b = g_snd[e.snd];
+        for (size_t k = 0; k < b.size() && s0 + k < n; ++k) mix[s0 + k] += b[k] * e.vol;
+    }
+    std::vector<int16_t> pcm(n);
+    for (size_t i = 0; i < n; ++i) pcm[i] = (int16_t)(std::tanh(mix[i]) * 32000.0f);
+    std::ofstream f(path, std::ios::binary);
+    if (!f) return false;
+    uint32_t dataBytes = (uint32_t)(n * 2), riff = 36 + dataBytes, fmtLen = 16, rate = RATE, byteRate = RATE * 2;
+    uint16_t pcmFmt = 1, ch = 1, align = 2, bits = 16;
+    f.write("RIFF", 4); f.write((char*)&riff, 4); f.write("WAVE", 4);
+    f.write("fmt ", 4); f.write((char*)&fmtLen, 4); f.write((char*)&pcmFmt, 2); f.write((char*)&ch, 2);
+    f.write((char*)&rate, 4); f.write((char*)&byteRate, 4); f.write((char*)&align, 2); f.write((char*)&bits, 2);
+    f.write("data", 4); f.write((char*)&dataBytes, 4); f.write((char*)pcm.data(), dataBytes);
+    g_recording = false;
+    return true;
+}
 bool muted() { return g_mute; }
 
 }  // namespace Audio

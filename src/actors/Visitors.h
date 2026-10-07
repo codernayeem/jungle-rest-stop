@@ -43,6 +43,11 @@ public:
     int carsParked() const;
     int totalArrived = 0, totalLeft = 0;
     const char* describe(int i) const;
+    struct Info { bool active = false; bool inCar = true; int state = 0; int actStage = 0; float actT = 0;
+                  Vec3 pos, carPos; float yaw = 0, carYaw = 0; };
+    Info info(int i) const;
+    int slots() const { return (int)m_vis.size(); }
+    enum { ST_DRIVE_IN = 0, ST_WAIT_LOT, ST_PARKING, ST_EXIT_CAR, ST_INSIDE, ST_ENTER_CAR, ST_WAIT_UNPARK, ST_UNPARKING, ST_DRIVE_OUT };
     int maxVisitors = 6;
     float spawnMin = 8.0f, spawnMax = 18.0f;   // seconds between arrivals
 

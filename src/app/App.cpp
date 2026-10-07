@@ -37,7 +37,7 @@ bool App::init(const AppOptions& opt) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_SAMPLES, opt.lowQuality ? 0 : 4);
-    if (!opt.shotsDir.empty()) glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    if (!opt.shotsDir.empty() || !opt.videoPath.empty()) glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     GLFWmonitor* mon = opt.fullscreen ? glfwGetPrimaryMonitor() : nullptr;
     int w = opt.width, h = opt.height;
     if (mon) { const GLFWvidmode* vm = glfwGetVideoMode(mon); w = vm->width; h = vm->height; }
@@ -52,7 +52,7 @@ bool App::init(const AppOptions& opt) {
     glfwSetCursorPosCallback(m_win, cbMouse);
     glfwSetMouseButtonCallback(m_win, cbButton);
     glfwSetScrollCallback(m_win, cbScroll);
-    setCursorFree(!opt.shotsDir.empty());
+    setCursorFree(!opt.shotsDir.empty() || !opt.videoPath.empty());
 
     glEnable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
@@ -62,7 +62,7 @@ bool App::init(const AppOptions& opt) {
     if (!m_renderer.init(terrainMeshHeight)) std::cerr << "Renderer shader problems (see above)\n";
     if (opt.lowQuality) { m_renderer.settings.shadowRes = 1024; m_renderer.settings.shadowRadius = 28.0f; }
     m_text.init();
-    if (opt.shotsDir.empty()) std::cout << (Audio::init() ? "Sound on" : "No sound device - running silent") << std::endl;   // screenshots are taken silently
+    if (opt.shotsDir.empty() && opt.videoPath.empty()) std::cout << (Audio::init() ? "Sound on" : "No sound device - running silent") << std::endl;   // screenshots are taken silently
     buildWorld();
     m_buildSeconds = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - t0).count();
     std::cout << "World built in " << m_buildSeconds << " s: " << m_renderer.staticInstanceCount() << " static shape instances in "
@@ -400,6 +400,7 @@ void App::takeScreenshot(const std::string& path) {
 // =============================================================================
 void App::run() {
     if (!m_opt.shotsDir.empty()) { runShots(m_opt.shotsDir); return; }
+    if (!m_opt.videoPath.empty()) { runCinematic(m_opt.videoPath); return; }
     notify("Welcome! Press H for help, Alt to use the on-screen buttons", 6.0f);
     double last = glfwGetTime(), fpsTimer = 0;
     int frames = 0;

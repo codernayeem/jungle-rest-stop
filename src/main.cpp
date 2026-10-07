@@ -7,6 +7,7 @@
 //    main.exe --low         low quality (smaller shadow map, fewer plants)
 //    main.exe --fullscreen  full screen
 //    main.exe --shots DIR   render the report screenshots into DIR and exit
+//    main.exe --video F.mp4 render a short cinematic video (needs ffmpeg) and exit
 // =============================================================================
 #include "app/App.h"
 #include <cstdlib>
@@ -19,6 +20,7 @@ int main(int argc, char** argv) {
         if (!std::strcmp(argv[i], "--low")) opt.lowQuality = true;
         else if (!std::strcmp(argv[i], "--fullscreen")) opt.fullscreen = true;
         else if (!std::strcmp(argv[i], "--shots") && i + 1 < argc) opt.shotsDir = argv[++i];
+        else if (!std::strcmp(argv[i], "--video") && i + 1 < argc) opt.videoPath = argv[++i];
         else if (!std::strcmp(argv[i], "--size") && i + 2 < argc) { opt.width = std::atoi(argv[i + 1]); opt.height = std::atoi(argv[i + 2]); i += 2; }
     }
     std::cout << "==============================================================\n"

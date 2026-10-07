@@ -26,6 +26,7 @@ struct GLFWwindow;
 struct AppOptions {
     bool lowQuality = false;
     std::string shotsDir;      // non-empty -> render report screenshots and exit
+    std::string videoPath;     // non-empty -> render the cinematic video (mp4) and exit
     int width = 1280, height = 720;
     bool fullscreen = false;
 };
@@ -56,6 +57,7 @@ private:
 
     // report figures (Showcase.cpp)
     void runShots(const std::string& dir);
+    void runCinematic(const std::string& mp4Path);
     void renderStudio(int w, int h, const Vec3& camPos, const Vec3& target, float fov, int partLimit, int object, float time,
                       float white = -1.0f);   // >= 0: white background, no floor, camera fitted to the object
     void renderPartTile(int w, int h, const Vec3& viewDir, int mesh, const Mat4& model, const Material& mat, const std::string& path);
