@@ -521,6 +521,18 @@ void App::runShots(const std::string& dir) {
         };
         m_day.hour = 11.0f;
         if (std::string(std::getenv("JRS_DEBUG")) == "tour") { tourShots(); return; }
+        if (std::string(std::getenv("JRS_DEBUG")) == "gloss") {
+            m_visitors.prewarm(120.0f, m_col);
+            hour(10.5f);
+            cam(Vec3(4.5f, 1.7f, 9.6f), Vec3(2.9f, 0.6f, 5.6f), 60); frame(false, 3); save("g_bin");
+            cam(Vec3(-1.0f, 2.0f, 10.5f), Vec3(2.45f, 1.5f, 7.35f), 55); frame(false, 3); save("g_posts");
+            freeCam(Vec3(-4.0f, 11.0f, 24.5f), Vec3(1.5f, 1.2f, 1.0f), 64); frame(false, 3); save("g_ext");
+            cam(Vec3(10.2f, 1.75f, 9.4f), Vec3(12.2f, 1.25f, 6.9f), 50); frame(false, 3); save("g_car_red");
+            cam(Vec3(-9.0f, 1.9f, 16.0f), Vec3(-9.0f, 0.6f, 21.0f), 62); frame(false, 3); save("g_car_blue");
+            hour(21.0f);
+            cam(Vec3(4.5f, 1.7f, 9.6f), Vec3(2.9f, 0.6f, 5.6f), 60); frame(false, 3); save("g_bin_night");
+            return;
+        }
         if (std::string(std::getenv("JRS_DEBUG")) == "wall") {
             hour(11.0f);
             cam(Vec3(-4.2f, 1.6f, 0.5f), Vec3(-4.2f, 1.6f, 5.0f), 75); frame(false, 3); save("w_front_left");
@@ -793,6 +805,9 @@ void App::runShots(const std::string& dir) {
     frame(false, 6); save("aquarium");
 
     tourShots();
+    hour(10.5f);
+    freeCam(Vec3(10.2f, 1.75f, 9.4f), Vec3(12.2f, 1.25f, 6.9f), 50);
+    frame(false, 3); save("gloss_sculpture");
 
     // machines
     fpsCam(Vec3(3.6f, 0, -1.9f), 180.0f, -12.0f, 60);

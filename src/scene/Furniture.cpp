@@ -219,8 +219,9 @@ void bench(const Node& n, float len) {
 }
 
 void trashBin(const Node& n, const Vec3& c) {
-    n.cyl({0, 0.40f, 0}, {0.42f, 0.80f, 0.42f}, Mat::paint(c));
-    n.part(M_HEMISPHERE, {0, 0.80f, 0}, {0.44f, 0.22f, 0.44f}, Mat::steel());
+    (void)c;   // polished stainless steel bin (shows the specular highlight and reflections clearly)
+    n.cyl({0, 0.40f, 0}, {0.42f, 0.80f, 0.42f}, Mat::chrome());
+    n.part(M_HEMISPHERE, {0, 0.80f, 0}, {0.44f, 0.22f, 0.44f}, Mat::chrome());
     n.box({0, 0.86f, 0.18f}, {0.18f, 0.06f, 0.08f}, Mat::black());
     n.cyl({0, 0.02f, 0}, {0.44f, 0.04f, 0.44f}, Mat::darkMetal());
 }

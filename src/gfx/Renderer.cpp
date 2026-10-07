@@ -116,6 +116,25 @@ uniform vec3 uFogColor;
 uniform float uFogDensity;
 uniform float uExposure;
 
+// What a mirror-like surface reflects in direction R (no real reflection is
+// traced; this is a cheap painted surrounding with strong contrast):
+//   outside: bright sky above, a dark band of jungle at the horizon, dark ground below,
+//            plus the glow of the sun;  inside: ceiling, walls and the light floor
+vec3 envColor(vec3 R, bool inside) {
+    float y = R.y;
+    if (inside) {
+        vec3 c = y > 0.45 ? vec3(0.22, 0.24, 0.22) : (y > -0.15 ? vec3(0.55, 0.50, 0.42) : vec3(0.75, 0.73, 0.70));
+        return c * (0.35 + uSkyAmb.g * 1.4);
+    }
+    vec3 sky = mix(uFogColor * 1.25 + 0.1, uSkyAmb * 2.6, smoothstep(0.1, 0.7, y));
+    vec3 trees = uGroundAmb * 0.3 + vec3(0.01, 0.025, 0.01);                // thin dark band at the horizon
+    vec3 ground = uGroundAmb * 0.7 + uLightColor * 0.3;                    // sunlit pavement and grass
+    vec3 c = mix(trees, sky, smoothstep(0.06, 0.12, y));
+    c = mix(c, ground, smoothstep(-0.02, -0.12, y));
+    c += uLightColor * pow(max(dot(R, uLightDir), 0.0), 48.0) * 3.0;   // the sun seen in the mirror
+    return c;
+}
+
 float shadowFactor(vec3 wp, vec3 n, float ndl) {
     vec4 lp = uLightVP * vec4(wp + n * 0.05, 1.0);
     vec3 p = lp.xyz / lp.w * 0.5 + 0.5;
@@ -184,6 +203,16 @@ void main() {
         if (indoor) amb *= 0.45;
         result = amb * albedo;
 
+        // ---- shiny materials ----
+        // metal: little diffuse light, a strong highlight in the metal's own colour,
+        //        and a mirror reflection of the surroundings (sky outside, room inside)
+        // gloss: normal paint underneath + a clear coat that reflects more at grazing angles
+        bool metal = (flags & 128) != 0, gloss = (flags & 256) != 0;
+        vec3 specCol = vec3(1.0);
+        vec3 baseCol = albedo;
+        if (metal) { specCol = albedo * 3.0; baseCol = albedo * 0.25; result = amb * baseCol; }
+        if (gloss) specCol = vec3(2.5);
+
         // ---- directional light: sun (day) or moon (night) ----
         float ndl = dot(N, uLightDir);
         float diff = foliage ? clamp(ndl * 0.6 + 0.4, 0.0, 1.0) : max(ndl, 0.0);
@@ -191,7 +220,15 @@ void main() {
         if (uUseShadow != 0 && diff > 0.0) sh = shadowFactor(vWorldPos, N, max(ndl, 0.0));
         vec3 H = normalize(uLightDir + V);
         float sp = ndl > 0.0 ? pow(max(dot(N, H), 0.0), shin) * specS : 0.0;
-        result += (albedo * diff + vec3(sp)) * uLightColor * sh;
+        if ((metal || gloss) && ndl > 0.0) sp += pow(max(dot(N, H), 0.0), 24.0) * 0.25;   // soft sheen around the sharp highlight
+        result += (baseCol * diff + specCol * sp) * uLightColor * sh;
+        if (metal || gloss) {
+            vec3 Rv = reflect(-V, N);
+            vec3 env = envColor(Rv, indoor);
+            float fres = pow(1.0 - max(dot(N, V), 0.0), 5.0);           // Schlick: more reflection at grazing angles
+            if (metal) result += env * albedo * (0.85 + 0.15 * fres);
+            else result += env * (0.08 + 0.75 * fres);
+        }
         if (foliage) {
             // light shining through thin leaves when looking towards the sun
             float through = pow(max(dot(-V, uLightDir), 0.0), 3.0);
@@ -216,7 +253,7 @@ void main() {
             float nl = foliage ? clamp(dot(N, L) * 0.6 + 0.4, 0.0, 1.0) : max(dot(N, L), 0.0);
             vec3 h = normalize(L + V);
             float s = pow(max(dot(N, h), 0.0), shin) * specS;
-            result += (albedo + vec3(s)) * nl * uPLColor[i].rgb * att;
+            result += (baseCol + specCol * s) * nl * uPLColor[i].rgb * att;
         }
         // ---- spot lights (downlights, head lights, reading lamp) ----
         for (int i = uSLStart[region]; i < uSLStart[region + 1]; ++i) {
@@ -231,7 +268,7 @@ void main() {
             float nl = foliage ? clamp(dot(N, L) * 0.6 + 0.4, 0.0, 1.0) : max(dot(N, L), 0.0);
             vec3 h = normalize(L + V);
             float s = pow(max(dot(N, h), 0.0), shin) * specS;
-            result += (albedo + vec3(s)) * nl * uSLColor[i] * att * cone;
+            result += (baseCol + specCol * s) * nl * uSLColor[i] * att * cone;
         }
         result += vEmit.rgb;
     }

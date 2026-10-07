@@ -19,7 +19,9 @@ enum MaterialFlags {
     MF_FOLIAGE   = 8,    // double sided + soft "wrap" lighting
     MF_CUTOUT    = 16,   // alpha-tested texture (leaves, grass)
     MF_TERRAIN   = 32,   // ground: blends grass / forest floor
-    MF_NO_SHADOW = 64    // does not cast shadows (CPU side only)
+    MF_NO_SHADOW = 64,   // does not cast shadows (CPU side only)
+    MF_METAL     = 128,  // polished metal: mirror-like reflection of the surroundings, tinted highlight
+    MF_GLOSS     = 256   // glossy lacquer (car paint): clear-coat reflection, strongest at grazing angles
 };
 
 struct Material {

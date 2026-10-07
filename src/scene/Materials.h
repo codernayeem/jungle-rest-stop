@@ -8,8 +8,8 @@ namespace Mat {
 inline Material plastic(const Vec3& c) { return Material(c, 0.35f, 48.0f); }
 inline Material matte(const Vec3& c) { return Material(c, 0.05f, 8.0f); }
 inline Material paint(const Vec3& c) { return Material(c, 0.55f, 64.0f).tx(TEX_METAL, 1.0f); }
-inline Material carPaint(const Vec3& c) { return Material(c, 0.9f, 96.0f); }
-inline Material chrome() { return Material(Vec3(0.82f, 0.84f, 0.88f), 0.95f, 128.0f).tx(TEX_METAL, 2.0f); }
+inline Material carPaint(const Vec3& c) { return Material(c, 1.0f, 160.0f).fl(MF_GLOSS); }
+inline Material chrome() { return Material(Vec3(0.86f, 0.88f, 0.92f), 1.0f, 200.0f).fl(MF_METAL); }
 inline Material steel() { return Material(Vec3(0.62f, 0.64f, 0.68f), 0.6f, 64.0f).tx(TEX_METAL, 1.5f); }
 inline Material darkMetal() { return Material(Vec3(0.16f, 0.17f, 0.19f), 0.5f, 48.0f).tx(TEX_METAL, 1.5f); }
 inline Material rubber() { return Material(Vec3(0.05f, 0.05f, 0.055f), 0.08f, 8.0f); }

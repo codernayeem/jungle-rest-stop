@@ -157,7 +157,7 @@ void Building::buildStatic(DrawSink& s, CollisionWorld& col) {
     w.box({0, 3.06f, 6.35f}, {5.4f, 0.14f, 2.5f}, canopy);
     w.box({0, 3.16f, 7.57f}, {5.44f, 0.10f, 0.1f}, Mat::darkMetal());   // fascia sticks 2 cm out of the canopy
     for (int sx = -1; sx <= 1; sx += 2) {
-        w.cyl({sx * 2.45f, 1.5f, 7.35f}, {0.16f, 3.0f, 0.16f}, Mat::darkMetal());
+        w.cyl({sx * 2.45f, 1.5f, 7.35f}, {0.16f, 3.0f, 0.16f}, Mat::chrome());   // polished chrome posts
         col.addCircle(sx * 2.45f, 7.35f, 0.12f);
     }
     // entrance door header with sensor
@@ -401,6 +401,15 @@ void Building::buildRoadAndLot(DrawSink& s, CollisionWorld& col) {
     Furniture::trashBin(w.at({2.9f, 0.06f, 5.6f}), Vec3(0.2f, 0.45f, 0.25f));
     col.addCircle(-2.9f, 5.6f, 0.22f);
     col.addCircle(2.9f, 5.6f, 0.22f);
+    // polished chrome sculpture on a marble pedestal (shows the specular highlight and reflections)
+    {
+        Node sc = w.at({12.2f, 0.06f, 6.9f});
+        sc.box({0, 0.45f, 0}, {0.62f, 0.9f, 0.62f}, Mat::marble(Vec3(0.88f, 0.87f, 0.84f)));
+        sc.box({0, 0.92f, 0}, {0.7f, 0.04f, 0.7f}, Mat::marble(Vec3(0.80f, 0.79f, 0.76f)));
+        sc.sph({0, 1.33f, 0}, Vec3(0.75f), Mat::chrome());
+        sc.torus({0, 0.99f, 0}, {0.95f, 0.7f, 0.95f}, Mat::chrome());   // chrome collar that holds the ball
+        col.addBox(11.85f, 6.55f, 12.55f, 7.25f, 0, 1.9f);
+    }
     // parking sign post
     Node ps = w.at({LOT_X1 + 0.9f, 0, 10.3f});   // on the grass beside the road, not on it
     ps.cyl({0, 1.2f, 0}, {0.08f, 2.4f, 0.08f}, Mat::steel());

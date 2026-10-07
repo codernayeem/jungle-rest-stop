@@ -44,7 +44,7 @@ SCENES = [
     "atm_1_welcome", "atm_1b_card", "atm_2_pin", "atm_3_menu", "atm_4_amount", "atm_5_processing",
     "atm_6_takecard", "atm_7_takecash", "atm_8_receipt", "atm_9_thanks", "coffee_brewing", "coffee_ready",
     "tv_ch1", "tv_ch2", "tv_ch3", "tv_ch4", "parking_lot", "visitors_inside", "parking_night", "road_day",
-    "road_night", "jungle_inside", "shadows_facade", "third_person", "fov_35", "fov_70", "fov_100", "story_car", "story_enter", "tour_lounge", "tour_vending", "tour_atm", "tour_coffee",
+    "road_night", "jungle_inside", "shadows_facade", "third_person", "fov_35", "fov_70", "fov_100", "story_car", "story_enter", "tour_lounge", "tour_vending", "tour_atm", "tour_coffee", "gloss_sculpture",
 ]
 for s in SCENES:
     p = os.path.join(SHOTS, s + ".png")

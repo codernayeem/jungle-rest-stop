@@ -950,6 +950,32 @@ a(d) = \frac{\big[\mathrm{clamp}(1-(d/r)^4,\,0,\,1)\big]^2}{1+d^2},\qquad
 c = \mathrm{smoothstep}\big(\cos\theta_{out},\ \cos\theta_{in},\ -\mathbf{L}\cdot\mathbf{D}\big)\ \text{for spot lights.}
 \]
 
+\subsection{Shiny materials: polished metal and glossy paint}\label{sec:shiny}
+Every material has its own $k_s$ and shininess $n$: fabric, plaster and bark are almost matte
+($k_s\approx0.05$, $n\approx8$), wood and leather are a little shiny, marble and the floor tiles are
+glossy ($n\approx90$). Two kinds of material get an extra term, because real metal and lacquer mostly show
+\emph{what is around them}:
+\begin{itemize}
+  \item \textbf{Polished metal (chrome)}: the chrome sculpture next to the entrance, the waste bins, the canopy
+        posts, the car wheel rims and handles. The diffuse part is made weak ($0.25\,k_d$), the highlight is strong
+        and has the metal's colour, and the surface reflects its surroundings.
+  \item \textbf{Glossy lacquer (car paint)}: normal coloured paint with a clear coat on top. The clear coat adds a
+        sharp white highlight and a reflection that becomes stronger at grazing angles.
+\end{itemize}
+The reflected direction is $\mathbf{R} = \operatorname{reflect}(-\mathbf{V},\mathbf{N}) = 2(\mathbf{N}\cdot\mathbf{V})\mathbf{N}-\mathbf{V}$.
+No real reflection is traced; instead the colour seen in direction $\mathbf{R}$ is a simple painted
+surrounding $E(\mathbf{R})$: bright sky above, a thin dark band of jungle at the horizon, sunlit ground below,
+and the glow of the sun (inside the building: ceiling, walls and floor). The amount of reflection uses
+Schlick's Fresnel approximation, $F = (1-\mathbf{N}\cdot\mathbf{V})^5$, which is large when you look along the
+surface:
+\[
+C_{metal} = \text{Phong}(0.25\,k_d,\ 3k_d) + E(\mathbf{R})\,k_d\,(0.85+0.15F),\qquad
+C_{paint} = \text{Phong}(k_d,\ 2.5) + E(\mathbf{R})\,(0.08+0.75F).
+\]
+\shot[0.6]{gloss_sculpture}{The chrome sculpture: the sharp specular highlight of the sun (top right), the sky and
+the dark tree line reflected around the middle, and the ground reflected below. The marble pedestal shows a
+softer, wider highlight.}
+
 \subsection{Light types and where they are shown}
 \begin{table}[H]
 \centering\small
