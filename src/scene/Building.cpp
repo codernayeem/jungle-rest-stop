@@ -1,4 +1,5 @@
 #include "Building.h"
+#include "../game/Audio.h"
 #include "Furniture.h"
 #include "Layout.h"
 #include "Lights.h"
@@ -81,7 +82,7 @@ void buildWall(DrawSink& s, CollisionWorld& col, bool alongX, float c, float a0,
             boxAt(o.a0 + 0.03f, ym, 0.0f, 0.06f, h - 0.12f, T + 0.02f, frame);       // side frames (between top/bottom)
             boxAt(o.a1 - 0.03f, ym, 0.0f, 0.06f, h - 0.12f, T + 0.02f, frame);
             boxAt(mid, ym, 0.0f, 0.04f, h - 0.12f, 0.06f, frame);                     // mullion
-            boxAt(mid, o.y0 - 0.02f, 0.0f, w + 0.1f, 0.04f, T + 0.16f, sill);       // sill
+            boxAt(mid, o.y0 - 0.01f, 0.0f, w + 0.1f, 0.04f, T + 0.16f, sill);       // sill (1 cm above the wall top, no shared face)
         } else {
             // door frame trim
             // trims overlap the wall end by 2 cm, so none of their faces lies on a wall face
@@ -154,7 +155,7 @@ void Building::buildStatic(DrawSink& s, CollisionWorld& col) {
     // porch canopy over the entrance
     Material canopy = Mat::concrete(Vec3(0.85f, 0.84f, 0.82f), 0.5f);
     w.box({0, 3.06f, 6.35f}, {5.4f, 0.14f, 2.5f}, canopy);
-    w.box({0, 3.16f, 7.55f}, {5.4f, 0.10f, 0.1f}, Mat::darkMetal());
+    w.box({0, 3.16f, 7.57f}, {5.44f, 0.10f, 0.1f}, Mat::darkMetal());   // fascia sticks 2 cm out of the canopy
     for (int sx = -1; sx <= 1; sx += 2) {
         w.cyl({sx * 2.45f, 1.5f, 7.35f}, {0.16f, 3.0f, 0.16f}, Mat::darkMetal());
         col.addCircle(sx * 2.45f, 7.35f, 0.12f);
@@ -356,23 +357,28 @@ void Building::buildRoadAndLot(DrawSink& s, CollisionWorld& col) {
         a.box({-0.55f, 0, -0.18f}, {0.6f, 0.006f, 0.2f}, line, {0, 40, 0});
     }
     // road through the jungle (segments following the curve)
-    float step = 3.0f;
-    for (int side = -1; side <= 1; side += 2)
-        for (float a = LOT_X1 - 0.5f; a < WORLD_HALF + 4.0f; a += step) {
+    // Short straight boxes along the curve. They overlap by 40 cm, so the small
+    // wedge-shaped gap on the outside of each bend is always covered.
+    Material shoulder = Material(Vec3(0.40f, 0.33f, 0.24f), 0.02f, 4.0f).tx(TEX_FOREST_FLOOR, 0.4f).fl(MF_NO_SHADOW);
+    const float step = 2.0f, ov = 0.4f;
+    for (int side = -1; side <= 1; side += 2) {
+        int k = 0;
+        for (float a = LOT_X1 + ov * 0.5f; a < WORLD_HALF + 4.0f; a += step, ++k) {   // first box starts at the lot edge
             float x0 = side * a, x1 = side * (a + step);
             float z0 = roadCenterZ(x0), z1 = roadCenterZ(x1);
             float dx = x1 - x0, dz = z1 - z0, len = std::sqrt(dx * dx + dz * dz);
             float yaw = toDegrees(std::atan2(-dz, dx));
             Node seg = w.at({(x0 + x1) * 0.5f, 0, (z0 + z1) * 0.5f}, {0, yaw, 0});
-            // neighbouring segments overlap a little, so every second one is 6 mm higher
-            float lift = (((int)(a / step)) % 2) * 0.006f;
-            seg.box({0, lift, 0}, {len + 0.25f, 0.03f, 7.4f}, asphalt);
-            seg.box({0, 0.03f, 3.35f}, {len + 0.25f, 0.006f, 0.14f}, line);
-            seg.box({0, 0.03f, -3.35f}, {len + 0.25f, 0.006f, 0.14f}, line);
-            if (((int)(a / step)) % 2 == 0) seg.box({0, 0.03f, 0}, {len * 0.55f, 0.006f, 0.12f}, yellow);
-            seg.box({0, -0.005f, 4.4f}, {len + 0.25f, 0.02f, 1.4f}, Material(Vec3(0.40f, 0.33f, 0.24f), 0.02f, 4.0f).tx(TEX_FOREST_FLOOR, 0.4f).fl(MF_NO_SHADOW));
-            seg.box({0, -0.005f, -4.4f}, {len + 0.25f, 0.02f, 1.4f}, Material(Vec3(0.40f, 0.33f, 0.24f), 0.02f, 4.0f).tx(TEX_FOREST_FLOOR, 0.4f).fl(MF_NO_SHADOW));
+            // overlapping neighbours: every second one is 6 mm higher (no z-fighting)
+            float lift = (k % 2) * 0.006f;
+            seg.box({0, lift, 0}, {len + ov, 0.03f, 7.4f}, asphalt);
+            seg.box({0, 0.022f + lift, 3.35f}, {len + ov, 0.006f, 0.14f}, line);
+            seg.box({0, 0.022f + lift, -3.35f}, {len + ov, 0.006f, 0.14f}, line);
+            if (k % 2 == 0) seg.box({0, 0.022f + lift, 0}, {len * 0.5f, 0.006f, 0.12f}, yellow);
+            seg.box({0, -0.005f + lift, 4.4f}, {len + ov, 0.02f, 1.4f}, shoulder);
+            seg.box({0, -0.005f + lift, -4.4f}, {len + ov, 0.02f, 1.4f}, shoulder);
         }
+    }
 
     // lamp posts (heads drawn dynamically so they can glow)
     m_lotLamps = {Vec3(-18, 0, 8.25f), Vec3(-6, 0, 8.25f), Vec3(6, 0, 8.25f), Vec3(18, 0, 8.25f),
@@ -396,14 +402,17 @@ void Building::buildRoadAndLot(DrawSink& s, CollisionWorld& col) {
     col.addCircle(-2.9f, 5.6f, 0.22f);
     col.addCircle(2.9f, 5.6f, 0.22f);
     // parking sign post
-    Node ps = w.at({LOT_X1 + 1.5f, 0, 13.0f});
+    Node ps = w.at({LOT_X1 + 0.9f, 0, 10.3f});   // on the grass beside the road, not on it
     ps.cyl({0, 1.2f, 0}, {0.08f, 2.4f, 0.08f}, Mat::steel());
     ps.box({0, 2.3f, 0.05f}, {0.7f, 0.7f, 0.04f}, Mat::plastic(Vec3(0.12f, 0.3f, 0.75f)), {0, -90, 0});
-    col.addCircle(LOT_X1 + 1.5f, 13.0f, 0.1f);
+    col.addCircle(LOT_X1 + 0.9f, 10.3f, 0.1f);
 
-    // lawn edge stones around the lot
-    Node(s).box({LOT_X0 - 0.1f, 0.06f, (LOT_Z0 + LOT_Z1) * 0.5f}, {0.2f, 0.12f, LOT_Z1 - LOT_Z0}, concrete);
-    Node(s).box({LOT_X1 + 0.1f, 0.06f, (LOT_Z0 + LOT_Z1) * 0.5f}, {0.2f, 0.12f, LOT_Z1 - LOT_Z0}, concrete);
+    // lawn edge stones at both ends of the lot, with a gap where the road comes in
+    const float roadZ0 = AISLE_Z - 3.7f, roadZ1 = AISLE_Z + 3.7f;
+    for (float ex : {LOT_X0 - 0.1f, LOT_X1 + 0.1f}) {
+        Node(s).box({ex, 0.06f, (LOT_Z0 + roadZ0) * 0.5f}, {0.2f, 0.12f, roadZ0 - LOT_Z0}, concrete);
+        Node(s).box({ex, 0.06f, (roadZ1 + LOT_Z1) * 0.5f}, {0.2f, 0.12f, LOT_Z1 - roadZ1}, concrete);
+    }
 }
 
 // =============================================================================
@@ -464,7 +473,11 @@ void Building::update(float dt, const std::vector<Vec3>& people) {
     bool someone = false;
     for (const auto& p : people)
         if (std::fabs(p.x) < 2.2f && std::fabs(p.z - Z_FRONT) < 2.8f) someone = true;
+    float before = m_doorOpen;
     m_doorOpen = approach(m_doorOpen, someone ? 1.0f : 0.0f, dt * 1.6f);
+    // whoosh when the doors start to open or to close
+    if ((before == 0.0f && m_doorOpen > 0.0f) || (before == 1.0f && m_doorOpen < 1.0f))
+        Audio::playAt(SND_DOOR, Vec3(0, 1.2f, Z_FRONT), 0.8f);
     m_doorClosed = m_doorOpen < 0.65f;
 }
 
@@ -506,8 +519,9 @@ void Building::drawRoof(DrawSink& dyn) const {
     w.part(M_HEMISPHERE, {2.0f, ROOF_Y + 0.95f, -3.0f}, {0.4f, 0.2f, 0.4f}, Mat::steel());
     // sign board standing on the parapet above the entrance
     Furniture::signBoard(w.at({0, ROOF_Y + 1.1f, Z_FRONT + 0.3f}), 5.6f, 0.9f, Vec3(0.12f, 0.30f, 0.16f), false);
-    w.box({-2.0f, ROOF_Y + 0.55f, Z_FRONT + 0.25f}, {0.1f, 0.6f, 0.1f}, Mat::darkMetal());
-    w.box({2.0f, ROOF_Y + 0.55f, Z_FRONT + 0.25f}, {0.1f, 0.6f, 0.1f}, Mat::darkMetal());
+    // legs: their front face is 2 cm in front of the parapet face (not on it -> no flicker)
+    w.box({-2.0f, ROOF_Y + 0.55f, Z_FRONT + 0.28f}, {0.1f, 0.6f, 0.08f}, Mat::darkMetal());
+    w.box({2.0f, ROOF_Y + 0.55f, Z_FRONT + 0.28f}, {0.1f, 0.6f, 0.08f}, Mat::darkMetal());
 }
 
 void Building::drawDynamic(DrawSink& dyn, float time, float hour, bool cutaway, const Vec3& cam) const {
@@ -604,7 +618,7 @@ void Building::drawText(TextRenderer& t, float time, bool lit) const {
     t.ctext(p, 0.8f, 0.12f, 0.12f, "Cover the keypad", Vec4(0.8f, 0.9f, 1, 1), 1);
     // parking sign
     Canvas ps;
-    ps.model = rotateYXZ(translate(Mat4(), Vec3(LOT_X1 + 1.5f - 0.03f, 2.3f, 13.0f)), {0, -90, 0});
+    ps.model = rotateYXZ(translate(Mat4(), Vec3(LOT_X1 + 0.9f - 0.03f, 2.3f, 10.3f + 0.05f)), {0, -90, 0});   // same place as the sign board
     ps.w = 0.7f; ps.h = 0.7f;
     t.ctext(ps, 0.35f, 0.1f, 0.55f, "P", Vec4(1, 1, 1, 1), 1);
 }

@@ -1,4 +1,5 @@
 #include "VendingMachine.h"
+#include "../game/Audio.h"
 #include "../game/Interaction.h"
 #include "../game/Inventory.h"
 #include "../game/Messages.h"
@@ -134,6 +135,7 @@ void VendingMachine::startVend(int idx, bool byNpc) {
     m_active = idx;
     m_vendT = 0.0f;
     m_state = VENDING;
+    Audio::playAt(SND_MOTOR, m_pos + Vec3(0, 1.2f, 0));
     m_byNpc = byNpc;
     Slot& s = m_slots[idx];
     if (!byNpc) {
@@ -225,6 +227,7 @@ void VendingMachine::update(float dt) {
         const float rest = BAY_FLOOR_Y + 0.035f;
         if (m_dropPos.y <= rest) {
             m_dropPos.y = rest;
+            Audio::playAt(SND_THUD, m_pos + Vec3(0, 0.5f, 0), std::min(1.0f, std::fabs(m_dropVel.y) * 0.5f));
             m_dropVel.y = -m_dropVel.y * 0.32f;   // bounce with energy loss
             m_dropVel.z = 0.0f;
             m_dropSpin *= 0.4f;
@@ -249,7 +252,7 @@ void VendingMachine::update(float dt) {
         if (c.landed) continue;
         c.vy -= 9.81f * dt;
         c.pos.y += c.vy * dt;
-        if (c.pos.y < 0.84f) { c.pos.y = 0.84f; c.landed = true; }
+        if (c.pos.y < 0.84f) { c.pos.y = 0.84f; c.landed = true; Audio::playAt(SND_COIN_DROP, m_pos + Vec3(0, 0.9f, 0), 0.6f); }
     }
 
     // slots restock some time after they become empty
@@ -281,6 +284,7 @@ void VendingMachine::registerInteractions() {
                if (!Inventory::player().pay(10)) { notify("Not enough cash - use the ATM!"); return; }
                m_credit += 10;
                m_slotAnim[0] = 1.0f;
+               Audio::play(SND_COIN);
            });
     is.add(m_idBase + 10, translate(m_root, {0.33f, 1.12f, FRONT_Z + 0.01f}), Vec3(0.09f, 0.03f, 0.02f),
            "Insert Tk 50 note  (you have " + tk(inv.cash) + ")", [this]() {
@@ -288,6 +292,7 @@ void VendingMachine::registerInteractions() {
                if (!Inventory::player().pay(50)) { notify("Not enough cash - use the ATM!"); return; }
                m_credit += 50;
                m_slotAnim[1] = 1.0f;
+               Audio::play(SND_COIN, 0.4f);
            });
     is.add(m_idBase + 11, translate(m_root, {0.42f, 1.23f, FRONT_Z + 0.01f}), Vec3(0.025f, 0.035f, 0.02f), "Coin return lever",
            [this]() { m_slotAnim[2] = 1.0f; returnCredit(); });
@@ -378,7 +383,7 @@ void VendingMachine::drawStatic(DrawSink& s) const {
     n.box({-0.15f, 0.40f, 0.06f}, {0.6f, 0.36f, 0.02f}, Mat::black());
     n.box({-0.15f, 0.60f, FRONT_Z - 0.018f}, {0.66f, 0.06f, 0.04f}, trim);
     n.box({-0.15f, 0.19f, FRONT_Z - 0.018f}, {0.66f, 0.04f, 0.04f}, trim);
-    n.box({-0.465f, 0.40f, FRONT_Z - 0.019f}, {0.04f, 0.34f, 0.04f}, trim);
+    n.box({-0.465f, 0.40f, FRONT_Z - 0.012f}, {0.04f, 0.34f, 0.04f}, trim);   // 8 mm proud of the side panel
     n.box({0.165f, 0.40f, FRONT_Z - 0.019f}, {0.04f, 0.34f, 0.04f}, trim);
 }
 

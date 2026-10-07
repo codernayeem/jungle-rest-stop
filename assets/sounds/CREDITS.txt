@@ -1,0 +1,17 @@
+Sound credits - all recordings are CC0 (public domain, free to use, no attribution required).
+They were trimmed, faded, converted to 44.1 kHz mono 16-bit WAV and levelled for this project.
+
+click.wav       Kenney "Interface Sounds"  click_002.ogg            https://kenney.nl/assets/interface-sounds
+beep.wav        Kenney "Interface Sounds"  select_002.ogg           https://kenney.nl/assets/interface-sounds
+coin.wav        Kenney "RPG Audio"         handleCoins.ogg          https://kenney.nl/assets/rpg-audio
+coin_drop.wav   Kenney "Casino Audio"      chips-collide-1.ogg      https://kenney.nl/assets/casino-audio
+cash.wav        Kenney "Casino Audio"      card-shuffle.ogg         https://kenney.nl/assets/casino-audio
+thud.wav        Kenney "Impact Sounds"     impactGeneric_light_001  https://kenney.nl/assets/impact-sounds
+motor.wav       "100 CC0 SFX #2"           sfx100v2_loop_machine_01 https://opengameart.org/content/100-cc0-sfx-2
+door.wav        "100 CC0 SFX #2"           sfx100v2_air_01          https://opengameart.org/content/100-cc0-sfx-2
+grind.wav       "30 CC0 SFX loops"         machine_08.ogg           https://opengameart.org/content/30-cc0-sfx-loops
+pour.wav        "30 CC0 SFX loops"         water_flowing.ogg        https://opengameart.org/content/30-cc0-sfx-loops
+car_open.wav    "Car_door_SFX"             door_opening.wav         https://opengameart.org/content/cardoorsfx
+car_close.wav   "Car_door_SFX"             door_closing.wav         https://opengameart.org/content/cardoorsfx
+amb_day.wav     "Ambient Bird Sounds"      birds-isaiah658.ogg      https://opengameart.org/content/ambient-bird-sounds
+amb_night.wav   "Crickets Ambient Noise - loopable"  crickets-oneloop.mp3  https://opengameart.org/content/crickets-ambient-noise-loopable

@@ -6,7 +6,9 @@ float roadCenterZ(float x) {
     if (ax < 30.0f) return Layout::AISLE_Z;
     float t = ax - 30.0f;
     float side = x > 0 ? 1.0f : -1.0f;
-    return Layout::AISLE_Z + std::sin(t * 0.035f) * 7.0f * side;
+    // the bend fades in smoothly (no sharp kink where the straight part ends)
+    float ease = t < 25.0f ? (t / 25.0f) * (t / 25.0f) * (3.0f - 2.0f * t / 25.0f) : 1.0f;
+    return Layout::AISLE_Z + std::sin(t * 0.035f) * 7.0f * side * ease;
 }
 
 bool isClearedArea(float x, float z, float m) {

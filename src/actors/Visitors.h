@@ -35,6 +35,7 @@ public:
     void draw(DrawSink& dyn, const Vec3& cam, float time) const;
     void addLights(float night) const;
     void peoplePositions(std::vector<Vec3>& out) const;
+    void arrivingCars(std::vector<Vec3>& out) const;   // cars still driving in on the road
     void forceSpawn() { m_spawnTimer = 0.0f; m_forceSpawn = true; }
     void prewarm(float seconds, CollisionWorld& col, std::ostream* log = nullptr);  // simulate ahead (screenshots)
 

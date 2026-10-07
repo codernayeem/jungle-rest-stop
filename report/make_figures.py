@@ -44,7 +44,7 @@ SCENES = [
     "atm_1_welcome", "atm_1b_card", "atm_2_pin", "atm_3_menu", "atm_4_amount", "atm_5_processing",
     "atm_6_takecard", "atm_7_takecash", "atm_8_receipt", "atm_9_thanks", "coffee_brewing", "coffee_ready",
     "tv_ch1", "tv_ch2", "tv_ch3", "tv_ch4", "parking_lot", "visitors_inside", "parking_night", "road_day",
-    "road_night", "jungle_inside", "shadows_facade", "third_person", "fov_35", "fov_70", "fov_100",
+    "road_night", "jungle_inside", "shadows_facade", "third_person", "fov_35", "fov_70", "fov_100", "story_car", "story_enter", "tour_lounge", "tour_vending", "tour_atm", "tour_coffee",
 ]
 for s in SCENES:
     p = os.path.join(SHOTS, s + ".png")
@@ -148,6 +148,142 @@ with open(os.path.join(GEN, "parts_table.tex"), "w") as out:
         cells = [str(int(r[2 + i])) if int(r[2 + i]) else "--" for i in used]
         out.write(tex_escape(NICE.get(r[0], r[0])) + " & \\textbf{" + r[1] + "} & " + " & ".join(cells) + " \\\\\n")
     out.write("\\bottomrule\n\\end{tabular}\n")
+
+# ---------------------------------------------------------------- parts catalogue figures
+# left: the whole object (camera fitted, white background)
+# right: every different basic shape of it alone in a numbered tile ("x4" = used 4 times)
+def autocrop(img, pad=18, thr=246):
+    g = img.convert("L").point(lambda v: 255 if v < thr else 0)
+    box = g.getbbox()
+    if not box:
+        return img
+    x0, y0, x1, y1 = box
+    return img.crop((max(0, x0 - pad), max(0, y0 - pad), min(img.width, x1 + pad), min(img.height, y1 + pad)))
+
+
+SPLIT = ["vending", "products", "atm", "coffee", "tv", "aquarium", "sofa", "armchair", "bookshelf", "tableset", "clock",
+         "pendant", "streetlamp", "human_walk", "human", "car_red", "tree", "palm", "bamboo", "banana", "undergrowth"]
+SHAPE_SHORT = {"Cube": "cube", "Cylinder": "cylinder", "Cylinder (low)": "cylinder", "Sphere": "sphere",
+               "Sphere (low)": "sphere", "Cone": "cone", "Truncated cone": "trunc. cone", "Torus": "torus",
+               "Hemisphere": "hemisphere", "Wedge": "wedge", "Tapered box": "tapered box", "Quad": "quad",
+               "Cross card": "cross card", "Leaf card": "leaf card", "Coil": "coil", "Terrain grid": "terrain"}
+
+
+def fmt(v):
+    return ("%.2f" % v).rstrip("0").rstrip(".") if v >= 0.1 else ("%.3f" % v).rstrip("0").rstrip(".")
+
+
+for o in SPLIT:
+    cpath = os.path.join(SHOTS, "catalog_%s.csv" % o)
+    wpath = os.path.join(SHOTS, "white_%s.png" % o)
+    if not (os.path.exists(cpath) and os.path.exists(wpath)):
+        continue
+    with open(cpath) as fc:
+        entries = list(csv.DictReader(fc))
+    n = len(entries)
+    parts_total, entries_total = int(entries[0]["parts_total"]), int(entries[0]["entries_total"])
+    cols = 3 if n <= 6 else (4 if n <= 12 else (5 if n <= 20 else 6))
+    rows = (n + cols - 1) // cols
+    T, LAB, GAP = 210, 60, 8
+    gw, gh = cols * (T + GAP), rows * (T + LAB + GAP)
+    grid = Image.new("RGB", (gw, gh), (255, 255, 255))
+    d = ImageDraw.Draw(grid)
+    f1, f2 = font(25), font(19)
+    for e in entries:
+        i = int(e["idx"])
+        tile = Image.open(os.path.join(SHOTS, "cat_%s_%02d.png" % (o, i))).convert("RGB").resize((T, T), Image.LANCZOS)
+        x, y = (i % cols) * (T + GAP), (i // cols) * (T + LAB + GAP)
+        grid.paste(tile, (x, y))
+        d.rectangle([x, y, x + T - 1, y + T - 1], outline=(215, 215, 215), width=2)
+        cnt = int(e["count"])
+        d.text((x + 6, y + 4), str(i + 1), fill=(200, 40, 40), font=f1)
+        name = SHAPE_SHORT.get(e["shape"], e["shape"]) + ("  x%d" % cnt if cnt > 1 else "")
+        d.text((x + T // 2, y + T + 3), name, fill=(25, 25, 25), font=f1, anchor="mt")
+        size = "×".join(fmt(float(e[k])) for k in ("sx", "sy", "sz"))   # metres
+        d.text((x + T // 2, y + T + 31), size, fill=(90, 90, 90), font=f2, anchor="mt")
+    # whole object on the left, as tall as the grid (but not narrower than 420 px)
+    whole = autocrop(load("white_" + o))
+    H = max(gh, 420)
+    ww = int(whole.width * H / whole.height)
+    maxw = int(gw * 1.1)
+    if ww > maxw:
+        ww, H2 = maxw, int(whole.height * maxw / whole.width)
+    else:
+        H2 = H
+    whole = whole.resize((ww, H2), Image.LANCZOS)
+    pad = 40
+    out = Image.new("RGB", (ww + pad + gw, max(H, gh) + 40), (255, 255, 255))
+    out.paste(whole, (0, (max(H, gh) - H2) // 2))
+    out.paste(grid, (ww + pad, 0))
+    dd = ImageDraw.Draw(out)
+    dd.line([(ww + pad // 2, 10), (ww + pad // 2, max(H, gh) - 10)], fill=(200, 200, 200), width=3)
+    ft = font(22)
+    dd.text((ww // 2, max(H, gh) + 8), "whole object (%d parts)" % parts_total, fill=(60, 60, 60), font=ft, anchor="mt")
+    more = entries_total - n
+    cap = "its %d different parts (sizes in metres)" % entries_total if more <= 0 else "its %d biggest different parts (+%d smaller), sizes in metres" % (n, more)
+    dd.text((ww + pad + gw // 2, max(H, gh) + 8), cap, fill=(60, 60, 60), font=ft, anchor="mt")
+    save_jpg(out, "split_" + o, width=1800, quality=88)
+
+# small texture swatches used inside the part tables
+for i in range(1, len(TEX_NAMES) + 1):
+    p = os.path.join(SHOTS, "tex_%02d.png" % i)
+    if os.path.exists(p):
+        Image.open(p).convert("RGB").resize((64, 64), Image.LANCZOS).save(os.path.join(FIG, "tx_%02d.jpg" % i), quality=88)
+
+# part tables: identical shapes with the same texture are grouped in one row
+SHAPE_SHORT = {"Cube": "cube", "Cylinder": "cylinder", "Cylinder (low)": "cylinder (low)", "Sphere": "sphere",
+               "Sphere (low)": "sphere (low)", "Cone": "cone", "Truncated cone": "truncated cone", "Torus": "torus",
+               "Hemisphere": "hemisphere", "Wedge": "wedge", "Tapered box": "tapered box", "Quad": "quad",
+               "Cross card": "cross card", "Leaf card": "leaf card", "Coil": "coil", "Terrain grid": "terrain"}
+with open(os.path.join(SHOTS, "partlist.csv")) as fpl:
+    plist = list(csv.DictReader(fpl))
+for o in SPLIT:
+    rows = [r for r in plist if r["object"] == o]
+    if not rows:
+        continue
+    groups = {}
+    order = []
+    for r in rows:
+        k = (r["shape"], int(r["texture"]))
+        if k not in groups:
+            groups[k] = {"count": 0, "cols": [], "glass": False, "glow": False, "size": None, "big": -1}
+            order.append(k)
+        g = groups[k]
+        g["count"] += int(r["count"])
+        col = tuple(min(1.0, max(0.0, float(r[c]))) for c in "rgb")
+        if all(sum(abs(col[i] - c2[i]) for i in range(3)) > 0.12 for c2 in g["cols"]):
+            g["cols"].append(col)
+        g["glass"] |= float(r["alpha"]) < 0.99
+        g["glow"] |= r["glow"] == "1"
+        sz = (float(r["sx"]), float(r["sy"]), float(r["sz"]))
+        vol = sz[0] * sz[1] * sz[2]
+        if vol > g["big"]:
+            g["big"], g["size"] = vol, sz
+    order.sort(key=lambda k: -groups[k]["count"])
+    total = sum(g["count"] for g in groups.values())
+    with open(os.path.join(GEN, "pl_%s.tex" % o), "w") as out:
+        out.write(r"\begin{table}[H]\centering\scriptsize" + "\n")
+        out.write(r"\caption{%s: the %d parts grouped by shape and texture (size = the largest part of the group, in metres)}"
+                  % (tex_escape(NICE.get(o, o)), total) + "\n")
+        out.write(r"\begin{tabular}{@{}l r l l l@{}}" + "\n" + r"\toprule" + "\n")
+        out.write(r"Shape & No. & Colours & Texture & Largest size $(s_x,s_y,s_z)$ \\" + "\n" + r"\midrule" + "\n")
+        for k in order:
+            g = groups[k]
+            sw = "".join(r"\sw{%.2f,%.2f,%.2f}" % c for c in g["cols"][:8])
+            if len(g["cols"]) > 8:
+                sw += r"\,+%d" % (len(g["cols"]) - 8)
+            extra = []
+            if g["glass"]:
+                extra.append("see-through")
+            if g["glow"]:
+                extra.append("glows")
+            if extra:
+                sw += " (" + ", ".join(extra) + ")"
+            t = k[1]
+            tx = (r"\txs{%02d} %s" % (t, TEX_NAMES[t - 1].replace("*", ""))) if 0 < t <= len(TEX_NAMES) else "--"
+            s = g["size"]
+            out.write(r"%s & %d & %s & %s & $%.3g\times%.3g\times%.3g$ \\" % (SHAPE_SHORT.get(k[0], k[0]), g["count"], sw, tx, s[0], s[1], s[2]) + "\n")
+        out.write(r"\bottomrule" + "\n" + r"\end{tabular}" + "\n" + r"\end{table}" + "\n")
 
 with open(os.path.join(SHOTS, "benchmark.csv")) as fb:
     bench = list(csv.DictReader(fb))

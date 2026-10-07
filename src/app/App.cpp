@@ -5,6 +5,7 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 #include "App.h"
+#include "../game/Audio.h"
 #include "../game/Interaction.h"
 #include "../game/Inventory.h"
 #include "../game/Messages.h"
@@ -61,6 +62,7 @@ bool App::init(const AppOptions& opt) {
     if (!m_renderer.init(terrainMeshHeight)) std::cerr << "Renderer shader problems (see above)\n";
     if (opt.lowQuality) { m_renderer.settings.shadowRes = 1024; m_renderer.settings.shadowRadius = 28.0f; }
     m_text.init();
+    if (opt.shotsDir.empty()) std::cout << (Audio::init() ? "Sound on" : "No sound device - running silent") << std::endl;   // screenshots are taken silently
     buildWorld();
     m_buildSeconds = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - t0).count();
     std::cout << "World built in " << m_buildSeconds << " s: " << m_renderer.staticInstanceCount() << " static shape instances in "
@@ -118,6 +120,7 @@ void App::buildWorld() {
 }
 
 void App::shutdown() {
+    Audio::shutdown();
     timeEndPeriod(1);
     m_text.shutdown();
     m_renderer.shutdown();
@@ -164,6 +167,7 @@ void App::onKey(int key, int action, int mods) {
         case GLFW_KEY_LEFT_BRACKET: m_day.slower(); notify("Time slower"); break;
         case GLFW_KEY_RIGHT_BRACKET: m_day.faster(); notify("Time faster"); break;
         case GLFW_KEY_M: m_day.paused = !m_day.paused; notify(m_day.paused ? "Time paused" : "Time running"); break;
+        case GLFW_KEY_O: Audio::toggleMute(); notify(Audio::muted() ? "Sound OFF" : "Sound ON"); break;
         case GLFW_KEY_R: m_cutaway = !m_cutaway; notify(m_cutaway ? "Roof hidden (cut-away)" : "Roof visible"); break;
         case GLFW_KEY_L: m_fpsCap = m_fpsCap == 60 ? 30 : 60; notify("FPS cap " + std::to_string(m_fpsCap)); break;
         case GLFW_KEY_H: m_showHelp = !m_showHelp; break;
@@ -244,6 +248,13 @@ void App::update(float dt) {
     m_tv.update(dt);
     m_aquarium.update(dt);
     m_wildlife.update(dt, m_day.night(), m_player.cameraPos());
+
+    // sound: the listener is the camera; birds by day, crickets at night, quieter indoors
+    Vec3 ear = m_player.cameraPos();
+    Audio::setListener(ear);
+    bool indoor = ear.x > Layout::BLD_X0 && ear.x < Layout::BLD_X1 && ear.z > Layout::BLD_Z0 && ear.z < Layout::BLD_Z1 && ear.y < Layout::ROOF_Y;
+    float amb = indoor ? 0.04f : 0.15f;   // background is only a faint bed under the other sounds
+    Audio::setAmbience((1.0f - m_day.night()) * amb, m_day.night() * amb);
 
     std::vector<Vec3> people;
     people.push_back(m_player.pos);

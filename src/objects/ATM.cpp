@@ -1,4 +1,5 @@
 #include "ATM.h"
+#include "../game/Audio.h"
 #include "../game/Interaction.h"
 #include "../game/Inventory.h"
 #include "../game/Messages.h"
@@ -66,7 +67,7 @@ void ATM::go(State s) {
         m_cashOut = m_cardOut = m_receiptOut = false;
     }
     if (s == TAKE_CARD) m_cardOut = true;
-    if (s == TAKE_CASH) m_cashOut = true;
+    if (s == TAKE_CASH) { m_cashOut = true; Audio::playAt(SND_CASH, m_pos + Vec3(0, 1.0f, 0)); }
     if (s == RECEIPT) m_receiptOut = true;
 }
 
@@ -107,6 +108,7 @@ void ATM::receiptSlot() {
 
 void ATM::sideKey(int i) {
     m_sideAnim[i] = 1.0f;
+    Audio::playAt(SND_BEEP, m_pos + Vec3(0, 1.3f, 0), 0.7f);
     switch (m_state) {
         case MENU:
             if (i == 0) go(AMOUNT);                       // withdraw
@@ -133,6 +135,7 @@ void ATM::sideKey(int i) {
 }
 
 void ATM::keypad(const std::string& k) {
+    Audio::playAt(SND_BEEP, m_pos + Vec3(0, 1.1f, 0), 0.7f);
     for (int i = 0; i < 16; ++i)
         if (k == KEYS[i] && !k.empty()) m_keyAnim[i] = 1.0f;
     if (k == "CANCEL") {

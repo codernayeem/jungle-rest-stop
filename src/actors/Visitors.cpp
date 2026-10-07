@@ -1,4 +1,5 @@
 #include "Visitors.h"
+#include "../game/Audio.h"
 #include "../objects/ATM.h"
 #include "../objects/Appliances.h"
 #include "../objects/VendingMachine.h"
@@ -498,8 +499,11 @@ void VisitorSystem::updatePerson(Visitor& v, float dt, const Vec3& player) {
     Vec3 seatW = cm.transformPoint(d.driverSeat);
     switch (v.state) {
         case EXIT_CAR: {
+            float t0 = v.stateT;
             v.stateT += dt;
             float t = v.stateT;
+            if (t0 == 0.0f) Audio::playAt(SND_CAR_DOOR, seatW, 0.9f);                       // door opens
+            if (t0 < 2.2f && t >= 2.2f) Audio::playAt(SND_CAR_CLOSE, seatW, 0.9f);         // door shuts
             v.car.doorAngle = t < 0.7f ? 70.0f * (t / 0.7f) : (t < 1.6f ? 70.0f : 70.0f * std::max(0.0f, 1.0f - (t - 1.6f) / 0.6f));
             Vec3 door = carDoorPoint(v);
             if (t > 0.6f && v.inCar) { v.inCar = false; setPose(v, POSE_WALK); v.pos = seatW; v.yaw = v.carYaw - 90.0f; }
@@ -530,8 +534,11 @@ void VisitorSystem::updatePerson(Visitor& v, float dt, const Vec3& player) {
             }
             break;
         case ENTER_CAR: {
+            float t0 = v.stateT;
             v.stateT += dt;
             float t = v.stateT;
+            if (t0 == 0.0f) Audio::playAt(SND_CAR_DOOR, seatW, 0.9f);
+            if (t0 < 2.3f && t >= 2.3f) Audio::playAt(SND_CAR_CLOSE, seatW, 0.9f);
             v.car.doorAngle = t < 0.7f ? 70.0f * (t / 0.7f) : (t < 1.7f ? 70.0f : 70.0f * std::max(0.0f, 1.0f - (t - 1.7f) / 0.6f));
             if (t > 0.6f && !v.inCar) {
                 float k = clampf((t - 0.6f) / 0.9f, 0.0f, 1.0f);
@@ -713,6 +720,11 @@ void VisitorSystem::addLights(float night) const {
 void VisitorSystem::peoplePositions(std::vector<Vec3>& out) const {
     for (const auto& v : m_vis)
         if (v.active && !v.inCar) out.push_back(v.pos);
+}
+
+void VisitorSystem::arrivingCars(std::vector<Vec3>& out) const {
+    for (const auto& v : m_vis)
+        if (v.active && v.state == DRIVE_IN) out.push_back(v.carPos);
 }
 
 int VisitorSystem::visitorsActive() const {

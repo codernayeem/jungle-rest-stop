@@ -784,15 +784,21 @@ void Renderer::renderShadowMap(const FrameInfo& f) {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         m_shadowResAllocated = res;
     }
-    // Orthographic light camera centred on the focus point, snapped to texels
+    // Orthographic light camera centred on the focus point. Two things keep the
+    // shadow edges still (no crawling / shimmering):
+    //  1) the sun direction used here only changes in steps of 0.5 degrees,
+    //  2) the centre is snapped to whole shadow-map texels in the light's own plane.
     float R = settings.shadowRadius;
     float texel = 2.0f * R / res;
-    Vec3 c = f.shadowFocus;
-    c.x = std::floor(c.x / texel) * texel;
-    c.z = std::floor(c.z / texel) * texel;
-    c.y = 0.0f;
-    Vec3 L = normalize(f.env.lightDir);
+    Vec3 Lnow = normalize(f.env.lightDir);
+    if (dot(Lnow, m_shadowDir) < std::cos(toRadians(0.5f))) m_shadowDir = Lnow;
+    Vec3 L = m_shadowDir;
     Vec3 up = std::fabs(L.y) > 0.98f ? Vec3(0, 0, 1) : Vec3(0, 1, 0);
+    Vec3 c = f.shadowFocus;
+    c.y = 0.0f;
+    Vec3 right = normalize(cross(up, L)), upL = cross(L, right);   // light-plane axes
+    float a = dot(c, right), b = dot(c, upL);
+    c = c + right * (std::floor(a / texel) * texel - a) + upL * (std::floor(b / texel) * texel - b);
     Mat4 lv = lookAt(c + L * 120.0f, c, up);
     Mat4 lp = ortho(-R, R, -R, R, 1.0f, 260.0f);
     m_lightVP = lp * lv;
@@ -847,6 +853,13 @@ void Renderer::beginFrame(const FrameInfo& f, int width, int height) {
     m_frame = f;
     m_camPos = f.camPos;
     m_viewProj = f.proj * f.view;
+    // Occlusion results are one frame old. After a camera jump or a fast turn they no
+    // longer fit the view, so forget them (every chunk is drawn again and re-tested).
+    Vec3 camDir = normalize(Vec3(-f.view.m[2], -f.view.m[6], -f.view.m[10]));
+    if ((f.camPos - m_lastCamPos).length() > 2.0f || dot(camDir, m_lastCamDir) < 0.94f)
+        for (auto& ch : m_chunks) { ch.occluded = false; ch.pending = false; }
+    m_lastCamPos = f.camPos;
+    m_lastCamDir = camDir;
     statDrawCalls = statInstances = statChunksVisible = 0;
     statTriangles = 0;
 

@@ -1,4 +1,5 @@
 #include "Interaction.h"
+#include "Audio.h"
 #include <cmath>
 
 void InteractionSystem::add(int id, const Mat4& model, const Vec3& half, const std::string& prompt,
@@ -45,5 +46,8 @@ void InteractionSystem::update(const Vec3& origin, const Vec3& dir, float maxDis
 }
 
 void InteractionSystem::useHovered() {
-    if (m_hoveredAction) m_hoveredAction();
+    if (m_hoveredAction) {
+        Audio::play(SND_CLICK, 0.8f);
+        m_hoveredAction();
+    }
 }

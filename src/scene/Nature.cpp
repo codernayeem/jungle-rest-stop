@@ -316,12 +316,10 @@ void buildGarden(DrawSink& s, CollisionWorld& col) {
         for (int i = 0; i < 4; ++i) pl.part(M_CROSS, {-0.7f + i * 0.45f, 0.5f, 0.15f}, {0.4f, 0.35f, 0.4f}, flowerM, {0, i * 37.0f, 0});
         col.addBox(px - 1.0f, 7.0f, px + 1.0f, 7.8f, 0.0f, 0.6f);
     }
-    // hedge rows along the lot sides
+    // one bush at each outer corner of the lot (clear of the kerb and the road)
     for (int side = -1; side <= 1; side += 2)
-        for (float z = LOT_Z0 + 0.6f; z < LOT_Z1; z += 1.1f) {
-            if (std::fabs(z - AISLE_Z) < 4.5f) continue;   // keep the road open
-            bush(Node(s, translate(Mat4(), Vec3(side * (LOT_X1 + 0.9f), 0, z))), 0.8f, rng);
-        }
+        for (float z : {LOT_Z0 + 0.4f, LOT_Z1 - 0.4f})
+            bush(Node(s, translate(Mat4(), Vec3(side * (LOT_X1 + 1.6f), 0, z))), 0.8f, rng);
 }
 
 // -----------------------------------------------------------------------------

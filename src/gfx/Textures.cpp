@@ -236,8 +236,10 @@ Px genPalm(float u, float v) {
 }
 
 Px genMetal(float u, float v) {
-    float streak = tnoise(u * 4, v * 256, 4 * 64, 71);   // horizontal brushing
-    float d = 0.92f + 0.16f * streak + 0.05f * tfbm(u, v, 4, 3, 9);
+    // soft horizontal brushing: wide, low-contrast streaks (thin high-contrast
+    // lines shimmer when the camera moves)
+    float streak = tnoise(0.5f, v * 64, 64, 71);   // depends on v only, so it tiles
+    float d = 0.95f + 0.07f * streak + 0.04f * tfbm(u, v, 4, 3, 9);
     return gray(d);
 }
 

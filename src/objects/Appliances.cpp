@@ -1,4 +1,5 @@
 #include "Appliances.h"
+#include "../game/Audio.h"
 #include "../game/Interaction.h"
 #include "../game/Inventory.h"
 #include "../game/Messages.h"
@@ -61,9 +62,9 @@ void CoffeeMachine::update(float dt) {
     m_time += dt;
     m_t += dt;
     for (float& b : m_btnAnim) b = std::max(0.0f, b - dt * 4.0f);
-    if (m_state == CUP_DROP && m_t > 0.5f) { m_state = GRINDING; m_t = 0; }
-    else if (m_state == GRINDING && m_t > 1.6f) { m_state = BREWING; m_t = 0; }
-    else if (m_state == BREWING && m_t > 4.5f) { m_state = READY; m_t = 0; }
+    if (m_state == CUP_DROP && m_t > 0.5f) { m_state = GRINDING; m_t = 0; Audio::playAt(SND_GRIND, m_pos + Vec3(0, 0.5f, 0)); }
+    else if (m_state == GRINDING && m_t > 1.6f) { m_state = BREWING; m_t = 0; Audio::playAt(SND_POUR, m_pos + Vec3(0, 0.3f, 0)); }
+    else if (m_state == BREWING && m_t > 4.5f) { m_state = READY; m_t = 0; Audio::playAt(SND_BEEP, m_pos + Vec3(0, 0.5f, 0)); }
     if (m_state == READY || m_state == BREWING) {
         if (std::fmod(m_time, 0.12f) < dt) m_steam.push_back({Vec3(((int)(m_time * 37) % 7 - 3) * 0.006f, 0.15f, 0.09f), 1.6f});
     }
@@ -92,9 +93,9 @@ void CoffeeMachine::drawStatic(DrawSink& s) const {
     Material black = Material(Vec3(0.06f, 0.06f, 0.07f), 0.6f, 64.0f);
     n.box({0, 0.02f, 0}, {0.40f, 0.04f, 0.40f}, black);
     n.box({0, 0.32f, -0.10f}, {0.40f, 0.56f, 0.20f}, steel);
-    n.box({-0.195f, 0.32f, 0.0f}, {0.012f, 0.56f, 0.38f}, black);
-    n.box({0.195f, 0.32f, 0.0f}, {0.012f, 0.56f, 0.38f}, black);
-    n.box({0, 0.53f, 0.0f}, {0.40f, 0.16f, 0.40f}, black);
+    n.box({-0.204f, 0.32f, 0.0f}, {0.012f, 0.56f, 0.38f}, black);   // side panels sit 4 mm outside the column
+    n.box({0.204f, 0.32f, 0.0f}, {0.012f, 0.56f, 0.38f}, black);
+    n.box({0, 0.53f, 0.0f}, {0.43f, 0.16f, 0.40f}, black);
     n.box({0, 0.575f, 0.201f}, {0.19f, 0.062f, 0.004f}, Material(Vec3(0.02f, 0.03f, 0.05f), 0.8f, 96.0f));
     for (int i = -1; i <= 1; i += 2) n.cyl({i * 0.025f, 0.43f, 0.09f}, {0.022f, 0.035f, 0.022f}, Mat::chrome());
     // drip tray with grill bars

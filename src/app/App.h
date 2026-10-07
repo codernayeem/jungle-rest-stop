@@ -56,7 +56,9 @@ private:
 
     // report figures (Showcase.cpp)
     void runShots(const std::string& dir);
-    void renderStudio(int w, int h, const Vec3& camPos, const Vec3& target, float fov, int partLimit, int object, float time);
+    void renderStudio(int w, int h, const Vec3& camPos, const Vec3& target, float fov, int partLimit, int object, float time,
+                      float white = -1.0f);   // >= 0: white background, no floor, camera fitted to the object
+    void renderPartTile(int w, int h, const Vec3& viewDir, int mesh, const Mat4& model, const Material& mat, const std::string& path);
     int studioPartCount(int object);
     void studioObject(DrawSink& s, int object, float time);
 

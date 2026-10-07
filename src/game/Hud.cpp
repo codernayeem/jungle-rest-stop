@@ -118,7 +118,7 @@ void Hud::draw(TextRenderer& t, int W, int H, const HudData& d) {
             "Mouse wheel / + -  change FOV",
             "B  BASIC <-> ENHANCED rendering   T textures   G shadows   F fog",
             "N  day <-> night    [ ]  time speed    M  pause time",
-            "R  roof cut-away    L  FPS cap 30/60    K  call a visitor car",
+            "R  roof cut-away    L  FPS cap 30/60    K  call a visitor car    O  sound on/off",
             "F1-F4  lounge / spot / room / outdoor lights",
             "F12  screenshot     Alt  free the mouse     H  hide help     Esc  quit",
             "",

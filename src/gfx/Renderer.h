@@ -165,9 +165,11 @@ private:
     GLuint m_shadowFbo = 0, m_shadowTex = 0;
     int m_shadowResAllocated = 0;
     Mat4 m_lightVP;
+    Vec3 m_shadowDir = Vec3(0, 1, 0);   // light direction used for the shadow map (moves in small steps)
     bool m_shadowValid = false;
 
     Mat4 m_viewProj;
     Vec3 m_camPos;
+    Vec3 m_lastCamPos = Vec3(1e9f), m_lastCamDir = Vec3(0, 0, 1);   // to notice camera jumps (occlusion reset)
     FrameInfo m_frame;
 };

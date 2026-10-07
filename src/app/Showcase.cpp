@@ -24,8 +24,86 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <map>
+#include <algorithm>
 
 namespace {
+// ---- debug: find boxes whose faces lie in the same plane (z-fighting / flicker) ----
+struct BoxRecorder : DrawSink {
+    std::vector<std::pair<Mat4, Material>> boxes;
+    void add(MeshId m, const Mat4& M, const Material& mat) override {
+        if (m == M_CUBE && mat.alpha > 0.99f) boxes.push_back({M, mat});
+    }
+};
+void findCoplanarFaces(const std::vector<std::pair<Mat4, Material>>& boxes, std::ostream& out) {
+    struct Face { Vec3 n, p, a, b; float d, ha, hb; int box; };
+    std::map<long long, std::vector<Face>> buckets;
+    for (int i = 0; i < (int)boxes.size(); ++i) {
+        const float* m = boxes[i].first.m;
+        Vec3 C[3] = {Vec3(m[0], m[1], m[2]), Vec3(m[4], m[5], m[6]), Vec3(m[8], m[9], m[10])};
+        Vec3 o(m[12], m[13], m[14]);
+        for (int k = 0; k < 3; ++k) {
+            float L = C[k].length();
+            if (L < 1e-5f) continue;
+            const Vec3& A = C[(k + 1) % 3];
+            const Vec3& B = C[(k + 2) % 3];
+            for (int sgn = -1; sgn <= 1; sgn += 2) {
+                Face f;
+                f.n = C[k] * (sgn / L);
+                f.p = o + C[k] * (0.5f * sgn);
+                f.a = normalize(A); f.ha = A.length() * 0.5f;
+                f.b = normalize(B); f.hb = B.length() * 0.5f;
+                f.d = dot(f.n, f.p);
+                f.box = i;
+                long long key = ((long long)std::lround(f.n.x * 50) + 64) * 1000003LL * 131 +
+                                ((long long)std::lround(f.n.y * 50) + 64) * 1000003LL + ((long long)std::lround(f.n.z * 50) + 64) * 7919LL +
+                                (long long)std::floor(f.d / 0.004f);
+                buckets[key].push_back(f);
+            }
+        }
+    }
+    struct Hit { float area; Vec3 p; int i, j; Vec3 n; };
+    std::vector<Hit> hits;
+    for (auto& kv : buckets) {
+        for (int dk = 0; dk <= 1; ++dk) {
+            auto it = buckets.find(kv.first + dk);
+            if (it == buckets.end()) continue;
+            const auto& A = kv.second;
+            const auto& B = it->second;
+            for (size_t x = 0; x < A.size(); ++x)
+                for (size_t y = (dk == 0 ? x + 1 : 0); y < B.size(); ++y) {
+                    const Face& f = A[x];
+                    const Face& g = B[y];
+                    if (f.box == g.box || dot(f.n, g.n) < 0.9995f || std::fabs(f.d - g.d) > 0.0015f) continue;
+                    if (f.n.y < -0.9f && f.p.y < 0.05f) continue;                          // bottoms lying on the ground
+                    if (f.n.y > 0.9f && std::fabs(f.p.y - 3.6f) < 0.02f) continue;        // wall tops hidden under the roof
+                    Vec3 r = g.p - f.p;
+                    float u = dot(r, f.a), v = dot(r, f.b);
+                    float eu = std::fabs(dot(g.a, f.a)) * g.ha + std::fabs(dot(g.b, f.a)) * g.hb;
+                    float ev = std::fabs(dot(g.a, f.b)) * g.ha + std::fabs(dot(g.b, f.b)) * g.hb;
+                    float ou = std::min(f.ha, u + eu) - std::max(-f.ha, u - eu);
+                    float ovv = std::min(f.hb, v + ev) - std::max(-f.hb, v - ev);
+                    if (ou < 0.004f || ovv < 0.004f) continue;
+                    const Material& m1 = boxes[f.box].second;
+                    const Material& m2 = boxes[g.box].second;
+                    bool differ = (m1.color - m2.color).length() > 0.02f || m1.tex != m2.tex || (m1.emission - m2.emission).length() > 0.01f;
+                    if (!differ) continue;
+                    hits.push_back({ou * ovv, f.p + f.a * ((std::min(f.ha, u + eu) + std::max(-f.ha, u - eu)) * 0.5f) +
+                                                   f.b * ((std::min(f.hb, v + ev) + std::max(-f.hb, v - ev)) * 0.5f), f.box, g.box, f.n});
+                }
+        }
+    }
+    std::sort(hits.begin(), hits.end(), [](const Hit& a, const Hit& b) { return a.area > b.area; });
+    out << "coplanar face pairs with different materials: " << hits.size() << "\n";
+    for (size_t k = 0; k < hits.size() && k < 80; ++k) {
+        const auto& h = hits[k];
+        const Material& m1 = boxes[h.i].second;
+        const Material& m2 = boxes[h.j].second;
+        out << "  n(" << std::lround(h.n.x) << "," << std::lround(h.n.y) << "," << std::lround(h.n.z) << ") area " << h.area << " at (" << h.p.x << ", " << h.p.y << ", " << h.p.z << ")  col1 (" << m1.color.x << "," << m1.color.y << ","
+            << m1.color.z << ") tex " << m1.tex << "  col2 (" << m2.color.x << "," << m2.color.y << "," << m2.color.z << ") tex " << m2.tex << "\n";
+    }
+}
+
 enum StudioObject {
     SO_VENDING, SO_ATM, SO_COFFEE, SO_TV, SO_SOFA, SO_ARMCHAIR, SO_BOOKSHELF, SO_HUMAN, SO_HUMAN_WALK, SO_HUMAN_SIT,
     SO_SEDAN, SO_SUV, SO_HATCH, SO_TREE, SO_PALM, SO_BAMBOO, SO_BANANA, SO_STREETLAMP, SO_PENDANT, SO_AQUARIUM,
@@ -42,6 +120,71 @@ CoffeeMachine g_sCoffee;
 Television g_sTv;
 Aquarium g_sAqua;
 bool g_sInit = false;
+bool g_catalogMode = false;   // parts catalogue of the car: leave the driver out
+
+// Collects every part of an object (shape, matrix, material) without drawing it
+struct PartCollector : DrawSink {
+    struct P { MeshId mesh; Mat4 M; Material m; };
+    std::vector<P> parts;
+    void add(MeshId mesh, const Mat4& M, const Material& m) override { parts.push_back({mesh, M, m}); }
+};
+
+// world-space box around one part: the 8 corners of its unit shape, transformed
+void partBounds(MeshId mesh, const Mat4& M, Vec3& lo, Vec3& hi) {
+    float y0 = (mesh == M_CROSS) ? 0.0f : -0.5f, y1 = (mesh == M_CROSS) ? 1.0f : 0.5f;
+    float hx = 0.5f, hz = 0.5f;
+    if (mesh == M_COIL) { hx = 0.065f; y0 = -0.065f; y1 = 0.065f; hz = 0.16f; }   // the spring is much smaller than its unit box
+    lo = Vec3(1e9f);
+    hi = Vec3(-1e9f);
+    for (int i = 0; i < 8; ++i) {
+        Vec3 c((i & 1) ? hx : -hx, (i & 2) ? y1 : y0, (i & 4) ? hz : -hz);
+        Vec3 w = M.transformPoint(c);
+        lo = Vec3(std::min(lo.x, w.x), std::min(lo.y, w.y), std::min(lo.z, w.z));
+        hi = Vec3(std::max(hi.x, w.x), std::max(hi.y, w.y), std::max(hi.z, w.z));
+    }
+}
+
+// Parts catalogue: identical parts (same shape, size and material) become one entry with a count
+struct CatalogEntry { MeshId mesh; Mat4 M; Material m; int count; Vec3 size; };
+std::vector<CatalogEntry> buildCatalog(const PartCollector& pc) {
+    std::vector<CatalogEntry> out;
+    auto q = [](float v, float st) { return (long)std::lround(v / st); };
+    auto qs = [](float v) { return (long)std::lround(std::log(std::max(v, 0.002f)) / std::log(1.15f)); };   // sizes within ~15% match
+    std::map<std::string, size_t> seen;
+    for (const auto& p : pc.parts) {
+        const float* m = p.M.m;
+        float d[3] = {Vec3(m[0], m[1], m[2]).length(), Vec3(m[4], m[5], m[6]).length(), Vec3(m[8], m[9], m[10]).length()};
+        float sd[3] = {d[0], d[1], d[2]};
+        std::sort(sd, sd + 3);
+        char key[256];
+        std::snprintf(key, sizeof(key), "%d|%d|%ld|%ld|%ld|%d|%d|%ld|%ld|%ld", (int)p.mesh, p.m.tex, q(p.m.color.x, 0.12f), q(p.m.color.y, 0.12f),
+                      q(p.m.color.z, 0.12f), p.m.alpha < 0.99f ? 1 : 0, p.m.emission.length() > 0.01f ? 1 : 0, qs(sd[0]), qs(sd[1]), qs(sd[2]));
+        auto it = seen.find(key);
+        if (it != seen.end()) { out[it->second].count++; continue; }
+        seen[key] = out.size();
+        out.push_back({p.mesh, p.M, p.m, 1, Vec3(d[0], d[1], d[2])});
+    }
+    // biggest parts first
+    auto vol = [](const Vec3& v) { return std::max(v.x, 0.01f) * std::max(v.y, 0.01f) * std::max(v.z, 0.01f); };
+    std::stable_sort(out.begin(), out.end(), [&](const CatalogEntry& a, const CatalogEntry& b) { return vol(a.size) > vol(b.size); });
+    return out;
+}
+
+// Part list for the report: identical parts (same shape + material) are grouped
+struct PartListSink : DrawSink {
+    struct G { MeshId mesh; Material m; int count; Vec3 size; };
+    std::vector<G> groups;
+    void add(MeshId mesh, const Mat4& M, const Material& m) override {
+        Vec3 sz(Vec3(M.m[0], M.m[1], M.m[2]).length(), Vec3(M.m[4], M.m[5], M.m[6]).length(), Vec3(M.m[8], M.m[9], M.m[10]).length());
+        for (auto& g : groups)
+            if (g.mesh == mesh && g.m.tex == m.tex && (g.m.color - m.color).length() < 0.03f && std::fabs(g.m.alpha - m.alpha) < 0.05f &&
+                (g.m.emission.length() > 0.01f) == (m.emission.length() > 0.01f)) {
+                g.count++;
+                return;
+            }
+        groups.push_back({mesh, m, 1, sz});
+    }
+};
 
 struct StudioCam { Vec3 pos, target; float fov; };
 StudioCam studioCam(int o) {
@@ -112,7 +255,7 @@ void App::studioObject(DrawSink& s, int o, float time) {
             st.time = time;
             Car::draw(n, l, st);
             CarDims d = Car::dims();
-            Human::draw(n.at(d.driverSeat), Human::look(0), Human::drive(0.0f), HELD_NONE);
+            if (!g_catalogMode) Human::draw(n.at(d.driverSeat), Human::look(0), Human::drive(0.0f), HELD_NONE);
             break;
         }
         case SO_TREE: Nature::rainforestTree(n, 1.0f, rng); break;
@@ -169,7 +312,23 @@ int App::studioPartCount(int o) {
     return c.count;
 }
 
-void App::renderStudio(int w, int h, const Vec3& camPos, const Vec3& target, float fov, int partLimit, int object, float time) {
+void App::renderStudio(int w, int h, const Vec3& camPos0, const Vec3& target0, float fov, int partLimit, int object, float time, float white) {
+    // white mode: keep the studio viewing direction, but move the camera so the whole object fits
+    Vec3 target = target0, camPos = camPos0;
+    if (white >= 0.0f) {
+        PartCollector pc;
+        studioObject(pc, object, time);
+        Vec3 lo(1e9f), hi(-1e9f);
+        for (const auto& p : pc.parts) {
+            Vec3 a, b;
+            partBounds(p.mesh, p.M, a, b);
+            lo = Vec3(std::min(lo.x, a.x), std::min(lo.y, a.y), std::min(lo.z, a.z));
+            hi = Vec3(std::max(hi.x, b.x), std::max(hi.y, b.y), std::max(hi.z, b.z));
+        }
+        target = (lo + hi) * 0.5f;
+        float r = (hi - lo).length() * 0.5f;
+        camPos = target + normalize(camPos0 - target0) * (r / std::sin(toRadians(fov) * 0.5f));
+    }
     FrameInfo f;
     f.proj = perspective(toRadians(fov), (float)w / h, 0.05f, 200.0f);
     f.view = lookAt(camPos, target, Vec3(0, 1, 0));
@@ -185,7 +344,7 @@ void App::renderStudio(int w, int h, const Vec3& camPos, const Vec3& target, flo
     e.castShadows = true;
     f.drawStatic = false;
     f.drawSky = false;
-    f.clearColor = Vec3(0.86f, 0.88f, 0.91f);
+    f.clearColor = white >= 0.0f ? Vec3(1.0f) : Vec3(0.86f, 0.88f, 0.91f);
     f.shadowFocus = target;
     f.indoorBox = Vec4(1e6f, 1e6f, 1e6f + 1, 1e6f + 1);
     f.farDist = 200.0f;
@@ -194,10 +353,12 @@ void App::renderStudio(int w, int h, const Vec3& camPos, const Vec3& target, flo
     m_renderer.settings.fog = false;
     m_renderer.settings.shadowRadius = std::max(6.0f, (camPos - target).length() * 0.9f);
     DrawSink& dyn = m_renderer.dynamicSink();
-    if (object != SO_PENDANT && object != SO_CLOCK)
+    if (object != SO_PENDANT && object != SO_CLOCK && white < 0.0f)
         dyn.add(M_CYLINDER, scale(translate(Mat4(), Vec3(0, -0.02f, 0)), Vec3(30.0f, 0.04f, 30.0f)), Material(Vec3(0.78f, 0.79f, 0.80f), 0.1f, 8.0f));
-    LimitSink lim(dyn, partLimit);
-    studioObject(lim, object, time);
+    {
+        LimitSink lim(dyn, partLimit);
+        studioObject(lim, object, time);
+    }
     m_renderer.beginFrame(f, w, h);
     if (partLimit > 100000) {   // screens are only shown on the finished object
         m_text.begin3D(m_renderer.viewProj());
@@ -211,6 +372,71 @@ void App::renderStudio(int w, int h, const Vec3& camPos, const Vec3& target, flo
     m_renderer.endFrame();
     m_renderer.settings.fog = fog;
     m_renderer.settings.shadowRadius = rad;
+}
+
+// Renders one part alone (same viewing direction as the studio), zoomed to fill
+// the middle square of the frame, and saves that square as a small PNG.
+void App::renderPartTile(int w, int h, const Vec3& viewDir, int mesh, const Mat4& M0, const Material& mat, const std::string& path) {
+    Mat4 M = M0;
+    M.m[12] = M.m[13] = M.m[14] = 0.0f;   // keep the part's rotation and size, drop its position
+    Vec3 lo, hi;
+    partBounds((MeshId)mesh, M, lo, hi);
+    Vec3 c = (lo + hi) * 0.5f;
+    float r = std::max(0.02f, (hi - lo).length() * 0.5f);
+    if (mesh == M_LEAVES || mesh == M_CROSS) r *= 0.6f;   // most of a leaf card is see-through: zoom in
+    const float fov = 30.0f;
+    Vec3 dir = viewDir;
+    if (mesh == M_QUAD) {   // a flat card: look at its face, not its edge
+        Vec3 nrm = normalize(Vec3(M.m[8], M.m[9], M.m[10]));
+        if (dot(nrm, viewDir) < 0) nrm = nrm * -1.0f;
+        dir = normalize(nrm * 0.85f + viewDir * 0.15f);
+    }
+    Vec3 cam = c + dir * (r / std::sin(toRadians(fov) * 0.5f) * 1.08f);
+    FrameInfo f;
+    f.proj = perspective(toRadians(fov), (float)w / h, r * 0.05f, r * 20.0f);
+    f.view = lookAt(cam, c, std::fabs(dir.y) > 0.98f ? Vec3(0, 0, -1) : Vec3(0, 1, 0));
+    f.camPos = cam;
+    f.time = 1.0f;
+    Environment& e = f.env;
+    e.lightDir = normalize(Vec3(0.55f, 0.85f, 0.65f));
+    e.lightColor = Vec3(1.05f, 1.0f, 0.95f);
+    e.skyAmbient = Vec3(0.50f, 0.52f, 0.56f);
+    e.groundAmbient = Vec3(0.30f, 0.29f, 0.27f);
+    e.fogDensity = 0.0f;
+    e.exposure = 1.25f;
+    e.castShadows = false;
+    f.drawStatic = false;
+    f.drawSky = false;
+    f.clearColor = Vec3(1.0f);
+    f.shadowFocus = c;
+    f.indoorBox = Vec4(1e6f, 1e6f, 1e6f + 1, 1e6f + 1);
+    f.farDist = 200.0f;
+    bool fog = m_renderer.settings.fog;
+    m_renderer.settings.fog = false;
+    Material m = mat;
+    m.lod = 0;
+    if (m.alpha < 0.99f) m.alpha = std::max(m.alpha, 0.55f);   // glass: a bit stronger, so it can be seen on white
+    m_renderer.dynamicSink().add((MeshId)mesh, M, m);
+    m_renderer.beginFrame(f, w, h);
+    m_renderer.drawTransparent();
+    m_renderer.endFrame();
+    m_renderer.settings.fog = fog;
+    glFinish();
+    // read the middle h x h square and shrink it 3 times (box filter)
+    std::vector<uint8_t> px((size_t)w * h * 3);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, px.data());
+    const int k = 3, n = h / k, x0 = (w - h) / 2;
+    std::vector<uint8_t> out((size_t)n * n * 3);
+    for (int y = 0; y < n; ++y)
+        for (int x = 0; x < n; ++x)
+            for (int ch = 0; ch < 3; ++ch) {
+                int sum = 0;
+                for (int dy = 0; dy < k; ++dy)
+                    for (int dx = 0; dx < k; ++dx) sum += px[((size_t)(h - 1 - (y * k + dy)) * w + x0 + x * k + dx) * 3 + ch];
+                out[((size_t)y * n + x) * 3 + ch] = (uint8_t)(sum / (k * k));
+            }
+    writePNG(path, n, n, out.data(), 3);
 }
 
 // =============================================================================
@@ -254,6 +480,19 @@ void App::runShots(const std::string& dir) {
         m_player.fov = fov;
     };
     auto hour = [&](float hr) { m_day.hour = hr; m_day.paused = true; };
+    // views for the picture tour at the start of the report (no HUD)
+    auto tourShots = [&]() {
+        hour(11.0f);
+        freeCam(Vec3(5.9f, 2.3f, 4.5f), Vec3(-1.5f, 0.8f, -2.8f), 72);
+        frame(false, 3); save("tour_lounge");
+        freeCam(Vec3(2.9f, 1.7f, -1.7f), Vec3(3.75f, 1.0f, -4.5f), 62);
+        frame(false, 3); save("tour_vending");
+        freeCam(Vec3(-8.2f, 1.6f, -2.3f), Vec3(-9.5f, 1.15f, -4.5f), 55);
+        frame(false, 3); save("tour_atm");
+        m_coffee.start(1, false);
+        freeCam(Vec3(-4.15f, 1.55f, -3.3f), Vec3(-5.0f, 1.2f, -4.55f), 50);
+        frame(false, 100); save("tour_coffee");
+    };
 
     // ---- quick debug renders (set JRS_DEBUG=1): close-ups + vending benchmark only ----
     if (std::getenv("JRS_DEBUG")) {
@@ -281,6 +520,50 @@ void App::runShots(const std::string& dir) {
             m_player.fov = fov;
         };
         m_day.hour = 11.0f;
+        if (std::string(std::getenv("JRS_DEBUG")) == "tour") { tourShots(); return; }
+        if (std::string(std::getenv("JRS_DEBUG")) == "wall") {
+            hour(11.0f);
+            cam(Vec3(-4.2f, 1.6f, 0.5f), Vec3(-4.2f, 1.6f, 5.0f), 75); frame(false, 3); save("w_front_left");
+            cam(Vec3(-1.0f, 1.6f, 1.0f), Vec3(-6.5f, 1.6f, 4.5f), 75); frame(false, 3); save("w_corner");
+            cam(Vec3(-4.2f, 1.6f, 9.0f), Vec3(-4.2f, 1.6f, 5.0f), 75); frame(false, 3); save("w_outside");
+            freeCam(Vec3(5.9f, 2.3f, 4.5f), Vec3(-1.5f, 0.8f, -2.8f), 72); frame(false, 3); save("w_tour");
+            return;
+        }
+        if (std::string(std::getenv("JRS_DEBUG")) == "views") {   // only the problem views
+            m_day.paused = true;
+            if (std::getenv("JRS_NO_OCC")) m_renderer.settings.occlusion = false;
+            {
+                BoxRecorder rec;
+                CollisionWorld dummy;
+                m_building.buildStatic(rec, dummy);
+                m_building.drawDynamic(rec, m_time, 12.0f, false, Vec3(0, 1.6f, 0));
+                for (auto& v : m_vend) { v.drawStatic(rec); v.drawDynamic(rec, v.standPos()); }
+                m_atm.drawStatic(rec); m_atm.drawDynamic(rec);
+                m_coffee.drawStatic(rec); m_coffee.drawDynamic(rec);
+                m_tv.drawStatic(rec); m_tv.drawDynamic(rec);
+                m_aquarium.drawStatic(rec); m_aquarium.drawDynamic(rec);
+                std::ofstream zf(dir + "/zfight.txt");
+                zf << rec.boxes.size() << " boxes\n";
+                findCoplanarFaces(rec.boxes, zf);
+            }
+            for (float x = 18; x <= 40; x += 2)
+                for (float z = 0; z <= 30; z += 2)
+                    for (int sd = -1; sd <= 1; sd += 2)
+                        if (std::fabs(terrainHeight(sd * x, z)) > 0.05f) log << "h(" << sd * x << "," << z << ")=" << terrainHeight(sd * x, z) << "\n";
+            cam(Vec3(27.0f, 25.0f, 12.01f), Vec3(27.0f, 0.0f, 12.0f), 50); frame(false, 3); save("v_top_e");
+            cam(Vec3(27.0f, 6.0f, 12.01f), Vec3(27.0f, 0.0f, 12.0f), 60); frame(false, 3); save("v_top_e_low");
+            const char* hrs[2] = {"day", "night"};
+            for (int k = 0; k < 2; ++k) {
+                m_day.hour = k == 0 ? 11.0f : 21.0f;
+                cam(Vec3(34.0f, 7.0f, 4.0f), Vec3(24.0f, 0.0f, 15.0f), 70); frame(false, 3); save(std::string("v_road_e_") + hrs[k]);
+                cam(Vec3(-34.0f, 7.0f, 4.0f), Vec3(-24.0f, 0.0f, 15.0f), 70); frame(false, 3); save(std::string("v_road_w_") + hrs[k]);
+                cam(Vec3(30.0f, 8.0f, 28.0f), Vec3(24.0f, 0.0f, 14.0f), 70); frame(false, 3); save(std::string("v_road_e2_") + hrs[k]);
+                Vec3 sp = m_atm.standPos();
+                fpsCam(sp + Vec3(0.25f, 0, -0.15f), 180.0f, -18.0f, 70); frame(false, 3); save(std::string("v_atm_") + hrs[k]);
+                cam(Vec3(2.5f, 5.0f, 7.0f), Vec3(1.0f, 4.6f, 5.3f), 60); frame(false, 3); save(std::string("v_sign_") + hrs[k]);
+            }
+            return;
+        }
         if (std::getenv("JRS_NOLIGHTS")) for (int g = 0; g < LG_COUNT; ++g) LightManager::get().groupOn[g] = false;
         m_day.paused = true;
         m_player.mode = CAM_FIRST;
@@ -375,6 +658,15 @@ void App::runShots(const std::string& dir) {
             for (int m = 0; m < M_COUNT; ++m) csv << "," << c.perMesh[m];
             csv << "\n";
         }
+        std::ofstream pl(dir + "/partlist.csv");
+        pl << "object,shape,texture,r,g,b,alpha,glow,count,sx,sy,sz" << "\n";
+        for (int o = 0; o < SO_COUNT; ++o) {
+            PartListSink ps;
+            studioObject(ps, o, 0.0f);
+            for (auto& g : ps.groups)
+                pl << SO_NAMES[o] << "," << meshName(g.mesh) << "," << g.m.tex << "," << g.m.color.x << "," << g.m.color.y << "," << g.m.color.z << ","
+                   << g.m.alpha << "," << (g.m.emission.length() > 0.01f ? 1 : 0) << "," << g.count << "," << g.size.x << "," << g.size.y << "," << g.size.z << "\n";
+        }
         std::ofstream st(dir + "/stats.txt");
         st << "static_instances " << m_renderer.staticInstanceCount() << "\nchunks " << m_renderer.statChunksTotal
            << "\nstatic_lights " << LightManager::get().staticCount() << "\ncolliders " << m_col.staticCount()
@@ -405,6 +697,27 @@ void App::runShots(const std::string& dir) {
         int total = studioPartCount(o);
         renderStudio(w, h, c.pos, c.target, c.fov, 1 << 30, o, 1.0f);
         save(std::string("obj_") + SO_NAMES[o]);
+        if (o != SO_SHAPES && o != SO_SUV && o != SO_HATCH && o != SO_HUMAN_SIT) {
+            renderStudio(w, h, c.pos, c.target, c.fov, 1 << 30, o, 1.0f, 0.0f);
+            save(std::string("white_") + SO_NAMES[o]);
+            // parts catalogue: every different part alone in its own tile
+            PartCollector pc;
+            g_catalogMode = true;
+            studioObject(pc, o, 1.0f);
+            g_catalogMode = false;
+            std::vector<CatalogEntry> cat = buildCatalog(pc);
+            Vec3 viewDir = normalize(c.pos - c.target);
+            std::ofstream cf(dir + "/catalog_" + SO_NAMES[o] + ".csv");
+            cf << "idx,shape,count,sx,sy,sz,parts_total,entries_total\n";
+            const int MAXT = 36;
+            for (int i = 0; i < (int)cat.size() && i < MAXT; ++i) {
+                char nm[256];
+                std::snprintf(nm, sizeof(nm), "%s/cat_%s_%02d.png", dir.c_str(), SO_NAMES[o], i);
+                renderPartTile(w, h, viewDir, cat[i].mesh, cat[i].M, cat[i].m, nm);
+                cf << i << "," << meshName(cat[i].mesh) << "," << cat[i].count << "," << cat[i].size.x << "," << cat[i].size.y << ","
+                   << cat[i].size.z << "," << pc.parts.size() << "," << cat.size() << "\n";
+            }
+        }
         if (o == SO_VENDING || o == SO_HUMAN || o == SO_SEDAN || o == SO_TREE || o == SO_PALM || o == SO_SOFA || o == SO_ATM || o == SO_STREETLAMP) {
             const float stages[3] = {0.12f, 0.35f, 0.65f};
             for (int k = 0; k < 3; ++k) {
@@ -428,7 +741,7 @@ void App::runShots(const std::string& dir) {
     // ---- scene views ----
     m_renderer.settings.enhanced = true;
     hour(10.5f);
-    freeCam(Vec3(-4.0f, 10.0f, 27.0f), Vec3(1.5f, 1.2f, 1.0f), 62);
+    freeCam(Vec3(-4.0f, 11.0f, 24.5f), Vec3(1.5f, 1.2f, 1.0f), 64);   // above the far edge of the lot: no plants in front
     frame(false); save("ext_day");
     m_renderer.settings.enhanced = false;
     frame(false); save("ext_day_basic");
@@ -479,6 +792,8 @@ void App::runShots(const std::string& dir) {
     fpsCam(Vec3(9.8f, 0, 2.2f), 0.0f, -12.0f, 55);
     frame(false, 6); save("aquarium");
 
+    tourShots();
+
     // machines
     fpsCam(Vec3(3.6f, 0, -1.9f), 180.0f, -12.0f, 60);
     frame(true); save("vending_row");
@@ -520,9 +835,41 @@ void App::runShots(const std::string& dir) {
     }
     m_tv.channel = 1;
 
+    // story shots: a visitor's car coming along the road, then people walking in
+    hour(15.5f);
+    {
+        m_visitors.forceSpawn();
+        Vec3 car;
+        bool found = false;
+        for (int i = 0; i < 2400 && !found; ++i) {   // up to 80 s of simulation
+            update(1.0f / 30.0f);
+            std::vector<Vec3> cars;
+            m_visitors.arrivingCars(cars);
+            for (auto& c : cars)
+                if (c.x > 45.0f && c.x < 60.0f) { car = c; found = true; }
+        }
+        if (found) {
+            float cx = car.x - 16.0f;
+            freeCam(Vec3(cx, 2.4f, roadCenterZ(cx) - 5.5f), car + Vec3(2.0f, 0.6f, 0), 55);
+            frame(false, 3);
+            save("story_car");
+        }
+        found = false;
+        for (int i = 0; i < 3600 && !found; ++i) {   // up to 120 s: wait for someone at the entrance
+            update(1.0f / 30.0f);
+            std::vector<Vec3> ppl;
+            m_visitors.peoplePositions(ppl);
+            for (auto& p : ppl)
+                if (std::fabs(p.x) < 2.0f && p.z > 5.8f && p.z < 8.0f) found = true;
+        }
+        freeCam(Vec3(4.5f, 2.3f, 13.5f), Vec3(0.0f, 1.2f, 5.5f), 55);
+        frame(false, 3);
+        save("story_enter");
+    }
+
     // people + cars
     hour(16.5f);
-    freeCam(Vec3(10.0f, 4.5f, 27.0f), Vec3(-2.0f, 0.8f, 12.0f), 60);
+    freeCam(Vec3(15.0f, 4.5f, 24.6f), Vec3(-2.0f, 0.8f, 12.0f), 60);   // between the ornamental palms
     frame(false, 30); save("parking_lot");
     fpsCam(Vec3(-1.5f, 0, 2.6f), 200.0f, -10.0f, 70);
     frame(false, 4); save("visitors_inside");
@@ -618,7 +965,7 @@ void App::runShots(const std::string& dir) {
             for (int g = 0; g < LG_COUNT; ++g) LightManager::get().groupOn[g] = true;
         };
         hour(10.5f);
-        freeCam(Vec3(-4.0f, 10.0f, 27.0f), Vec3(1.5f, 1.2f, 1.0f), 62);
+        freeCam(Vec3(-4.0f, 11.0f, 24.5f), Vec3(1.5f, 1.2f, 1.0f), 64);   // above the far edge of the lot: no plants in front
         bench("exterior");
         fpsCam(Vec3(0.0f, 0, 4.3f), 180.0f, -6.0f, 75);
         bench("lounge");
