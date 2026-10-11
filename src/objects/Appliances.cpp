@@ -91,44 +91,63 @@ void CoffeeMachine::drawStatic(DrawSink& s) const {
     Node n(s, m_root);
     Material steel = Mat::steel();
     Material black = Material(Vec3(0.06f, 0.06f, 0.07f), 0.6f, 64.0f);
+    partTag("Base");
     n.box({0, 0.02f, 0}, {0.40f, 0.04f, 0.40f}, black);
+    partTag("Steel column");
     n.box({0, 0.32f, -0.10f}, {0.40f, 0.56f, 0.20f}, steel);
+    partTag("Side panels");
     n.box({-0.204f, 0.32f, 0.0f}, {0.012f, 0.56f, 0.38f}, black);   // side panels sit 4 mm outside the column
     n.box({0.204f, 0.32f, 0.0f}, {0.012f, 0.56f, 0.38f}, black);
+    partTag("Head unit");
     n.box({0, 0.53f, 0.0f}, {0.43f, 0.16f, 0.40f}, black);
+    partTag("LCD screen");
     n.box({0, 0.575f, 0.201f}, {0.19f, 0.062f, 0.004f}, Material(Vec3(0.02f, 0.03f, 0.05f), 0.8f, 96.0f));
+    partTag("Nozzles");
     for (int i = -1; i <= 1; i += 2) n.cyl({i * 0.025f, 0.43f, 0.09f}, {0.022f, 0.035f, 0.022f}, Mat::chrome());
+    partTag("Drip tray + grill");
     // drip tray with grill bars
     n.box({0, 0.05f, 0.08f}, {0.28f, 0.02f, 0.18f}, Mat::chrome());
     for (int i = 0; i < 6; ++i) n.box({-0.11f + i * 0.044f, 0.062f, 0.08f}, {0.008f, 0.004f, 0.16f}, black);
+    partTag("Bean hopper");
     // bean hopper (transparent) with beans inside, lid
     n.tcone({0.0f, 0.70f, -0.06f}, {0.24f, 0.18f, 0.24f}, Mat::glass(0.35f, Vec3(0.6f, 0.5f, 0.4f)), {180, 0, 0});
+    partTag("Coffee beans");
     n.cyl({0.0f, 0.66f, -0.06f}, {0.17f, 0.09f, 0.17f}, Material(Vec3(0.28f, 0.16f, 0.08f), 0.3f, 32.0f).tx(TEX_ROCK, 20.0f));
+    partTag("Hopper lid");
     n.cyl({0.0f, 0.80f, -0.06f}, {0.25f, 0.02f, 0.25f}, black);
+    partTag("Water tank");
     // water tank at the back
     n.box({0.12f, 0.33f, -0.24f}, {0.12f, 0.45f, 0.08f}, Mat::glass(0.4f, Vec3(0.6f, 0.8f, 1.0f)));
+    partTag("Chrome trim");
     n.box({0.0f, 0.538f, 0.205f}, {0.40f, 0.008f, 0.004f}, Mat::chrome());
 }
 
 void CoffeeMachine::drawDynamic(DrawSink& dyn) const {
     Node n(dyn, m_root);
     auto& is = InteractionSystem::get();
+    partTag("Drink buttons");
     for (int i = 0; i < 3; ++i) {
         Material b = Mat::plastic(BTN_COL[i]);
         if (is.hovered(m_idBase + i)) b.emission = Vec3(0.3f, 0.5f, 0.7f);
         else if (m_state == IDLE) b.emission = BTN_COL[i] * 0.25f;
+        partTag("Drink buttons");
         n.part(M_CYLINDER, {-0.11f + i * 0.11f, 0.497f, 0.205f - m_btnAnim[i] * 0.005f}, {0.04f, 0.012f, 0.04f}, b, {90, 0, 0});
+        partTag("Button rings");
         n.part(M_TORUS, {-0.11f + i * 0.11f, 0.497f, 0.201f}, {0.062f, 0.04f, 0.062f}, Mat::chrome(), {90, 0, 0});
     }
+    partTag("LCD screen");
     n.box({0, 0.575f, 0.2045f}, {0.18f, 0.055f, 0.002f}, Mat::glow(Vec3(0.05f, 0.12f, 0.20f), 1.0f));
+    partTag("Status LED");
     n.sph({0.17f, 0.59f, 0.202f}, Vec3(0.012f), Mat::glow(m_state == IDLE ? Vec3(0.2f, 1.0f, 0.3f) : Vec3(1.0f, 0.6f, 0.1f), 1.5f));
     if (m_state == IDLE) return;
+    partTag("Cup");
     // cup (drops in, then fills)
     float cupY = 0.064f;
     if (m_state == CUP_DROP) cupY = 0.40f - (0.40f - 0.064f) * std::min(1.0f, (m_t / 0.5f) * (m_t / 0.5f));
     Node cup = n.at({0, cupY, 0.09f});
     Material ceramic = Material(Vec3(0.96f, 0.96f, 0.94f), 0.6f, 80.0f);
     cup.tcone({0, 0.045f, 0}, {0.085f, 0.09f, 0.085f}, ceramic, {180, 0, 0});
+    partTag("Cup handle");
     cup.part(M_TORUS, {0.05f, 0.05f, 0}, {0.06f, 0.06f, 0.06f}, ceramic, {90, 0, 0});
     float fill = m_state == BREWING ? m_t / 4.5f : (m_state == READY ? 1.0f : 0.0f);
     if (fill > 0.01f) {
@@ -137,12 +156,15 @@ void CoffeeMachine::drawDynamic(DrawSink& dyn) const {
         float hgt = 0.006f + 0.075f * fill;
         float rad = (0.0298f + (0.0425f - 0.0298f) * (hgt / 0.09f)) * 2.0f - 0.006f;
         bool foam = m_drink == 1 && fill > 0.75f;
+        partTag("Coffee surface");
         cup.cyl({0, hgt, 0}, {rad, 0.003f, rad}, Material(foam ? Vec3(0.93f, 0.88f, 0.78f) : DRINK_COL[m_drink], 0.7f, 96.0f));
     }
+    partTag("Pouring stream");
     if (m_state == BREWING) {
         float top = 0.41f, bottom = cupY + 0.006f + 0.075f * fill;
         n.cyl({0, (top + bottom) * 0.5f, 0.09f}, {0.006f, top - bottom, 0.006f}, Material(DRINK_COL[m_drink], 0.8f, 96.0f));
     }
+    partTag("Steam puffs");
     for (const auto& p : m_steam)
         n.sph(p.p + Vec3(0, cupY - 0.064f, 0), Vec3(0.02f + (1.6f - p.life) * 0.025f),
               Material(Vec3(0.95f), 0.0f, 1.0f).a(0.25f * std::min(1.0f, p.life)).fl(MF_UNLIT));
@@ -225,8 +247,11 @@ void Television::registerInteractions() {
 
 void Television::drawStatic(DrawSink& s) const {
     Node n(s, m_root);
+    partTag("Wall bracket");
     n.box({0, 0, -0.06f}, {0.45f, 0.32f, 0.06f}, Mat::darkMetal());     // wall bracket
+    partTag("TV body");
     n.box({0, 0, -0.015f}, {1.86f, 1.08f, 0.045f}, Mat::black());
+    partTag("Bottom trim");
     n.box({0, -0.548f, 0.0f}, {1.86f, 0.016f, 0.05f}, Mat::darkMetal());
 }
 
@@ -235,7 +260,9 @@ void Television::drawDynamic(DrawSink& dyn) const {
     bool hov = InteractionSystem::get().hovered(m_idBase);
     Material scr = channel == 0 ? Material(Vec3(0.02f, 0.02f, 0.025f), 1.0f, 200.0f) : Mat::glow(Vec3(0.05f), 1.0f);
     if (hov) scr.emission = scr.emission + Vec3(0.05f, 0.08f, 0.12f);
+    partTag("Screen");
     n.box({0, 0, 0.0085f}, {1.78f, 1.0f, 0.002f}, scr);
+    partTag("Power LED");
     n.sph({0.86f, -0.535f, 0.02f}, Vec3(0.012f), Mat::glow(channel ? Vec3(0.2f, 1.0f, 0.3f) : Vec3(1.0f, 0.1f, 0.1f), 1.5f));
 }
 
@@ -454,25 +481,36 @@ void Aquarium::registerLights() const {
 void Aquarium::drawStatic(DrawSink& s) const {
     Node n(s, m_root);
     Material wood = Mat::wood(Vec3(0.30f, 0.19f, 0.10f), 1.5f);
+    partTag("Wooden stand");
     n.box({0, 0.375f, 0}, {1.8f, 0.75f, 0.5f}, wood);
+    partTag("Cabinet doors");
     for (int i = 0; i < 3; ++i) {
+        partTag("Cabinet doors");
         n.box({-0.6f + i * 0.6f, 0.37f, 0.252f}, {0.56f, 0.64f, 0.01f}, Mat::wood(Vec3(0.36f, 0.23f, 0.13f), 1.5f));
+        partTag("Door handles");
         n.box({-0.6f + i * 0.6f + 0.22f, 0.45f, 0.262f}, {0.02f, 0.12f, 0.02f}, Mat::chrome());
     }
+    partTag("Sand bed");
     n.box({0, 0.79f, 0}, {1.76f, 0.06f, 0.46f}, Material(Vec3(0.90f, 0.80f, 0.60f), 0.05f, 8.0f).tx(TEX_SAND, 4.0f));
     Rng r(5);
+    partTag("Rocks");
     for (int i = 0; i < 6; ++i)
         n.part(M_SPHERE_LOW, {r.range(-0.75f, 0.75f), 0.83f, r.range(-0.15f, 0.12f)}, {r.range(0.08f, 0.18f), r.range(0.06f, 0.12f), r.range(0.08f, 0.14f)},
                Material(Vec3(0.45f, 0.42f, 0.40f), 0.2f, 16.0f).tx(TEX_ROCK, 4.0f), {0, r.range(0.0f, 180.0f), 0});
+    partTag("Driftwood");
     n.part(M_CYLINDER_LOW, {-0.3f, 0.86f, -0.08f}, {0.05f, 0.6f, 0.05f}, Mat::bark(Vec3(0.35f, 0.25f, 0.15f)), {0, 30, 75});
+    partTag("Air stone");
     n.part(M_TCONE, {0.68f, 0.83f, -0.12f}, {0.04f, 0.03f, 0.04f}, Mat::matte(Vec3(0.3f, 0.3f, 0.35f)));
+    partTag("Hood");
     // hood with light strip
     n.box({0, 1.41f, 0}, {1.84f, 0.08f, 0.54f}, Mat::black());
+    partTag("Hood light");
     n.box({0, 1.366f, 0.1f}, {1.7f, 0.01f, 0.05f}, Mat::glow(Vec3(0.75f, 0.92f, 1.0f), 2.0f));
 }
 
 void Aquarium::drawDynamic(DrawSink& dyn) const {
     Node n(dyn, m_root);
+    partTag("Water plants");
     // swaying water plants (wind flag reused as water current)
     Material plant = Mat::leafCard(Vec3(0.25f, 0.70f, 0.30f), TEX_GRASS_BLADES);
     for (int i = 0; i < 7; ++i)
@@ -482,15 +520,23 @@ void Aquarium::drawDynamic(DrawSink& dyn) const {
         float s = f.size;
         Node fn = n.at({f.x, f.cy, f.z}, {0, f.yaw, 0});
         Material body = Material(f.color, 0.7f, 64.0f);
+        partTag("Fish bodies");
         fn.sph({0, 0, 0}, {0.45f * s, 0.75f * s, 1.25f * s}, body);
+        partTag("Fish tails");
         Node tail = fn.at({0, 0, -0.55f * s}).rotY(std::sin(m_time * 9.0f + f.phase * 3.0f) * 25.0f);
         tail.part(M_CONE, {0, 0, -0.25f * s}, {0.08f * s, 0.5f * s, 0.7f * s}, Material(f.fin, 0.4f, 32.0f), {90, 0, 0});
+        partTag("Fish fins");
         fn.part(M_WEDGE, {0, 0.42f * s, -0.1f * s}, {0.05f * s, 0.3f * s, 0.5f * s}, Material(f.fin, 0.4f, 32.0f), {0, 180, 0});
+        partTag("Fish eyes");
         for (int e = -1; e <= 1; e += 2) fn.sph({e * 0.17f * s, 0.12f * s, 0.42f * s}, Vec3(0.13f * s), Mat::black());
     }
+    partTag("Bubbles");
     for (const auto& b : m_bubbles) n.sph(b.p, Vec3(0.018f), Material(Vec3(0.9f, 0.95f, 1.0f), 1.0f, 128.0f).a(0.45f));
+    partTag("Fish food");
     for (const auto& f : m_food) n.sph(f.p, Vec3(0.008f), Mat::matte(Vec3(0.6f, 0.35f, 0.15f)));
     // water volume and glass (transparent, drawn last by the renderer)
+    partTag("Water");
     n.box({0, 1.03f, 0}, {1.76f, 0.5f, 0.46f}, Material(Vec3(0.35f, 0.65f, 0.80f), 0.9f, 96.0f).a(0.16f).fl(MF_NO_SHADOW));
+    partTag("Glass tank");
     n.box({0, 1.06f, 0}, {1.8f, 0.62f, 0.5f}, Mat::glass(0.12f));
 }

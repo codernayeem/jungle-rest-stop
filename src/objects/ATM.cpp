@@ -269,31 +269,45 @@ void ATM::drawStatic(DrawSink& s) const {
     Material fascia = Mat::paint(Vec3(0.75f, 0.77f, 0.80f));
     Material blue = Mat::paint(Vec3(0.08f, 0.28f, 0.62f));
     Material dark = Mat::black();
+    partTag("Plinth");
     n.box({0, 0.04f, 0}, {1.0f, 0.08f, 0.72f}, Mat::darkMetal());
+    partTag("Lower cabinet");
     n.box({0, 0.54f, 0}, {0.96f, 0.92f, 0.66f}, body);
+    partTag("Upper fascia");
     n.box({0, 1.45f, -0.08f}, {0.96f, 0.80f, 0.50f}, fascia);
+    partTag("Header");
     n.box({0, 1.96f, 0}, {1.04f, 0.24f, 0.72f}, blue);
+    partTag("Light strip");
     n.box({0, 1.835f, 0.33f}, {1.0f, 0.02f, 0.05f}, Mat::glow(Vec3(0.75f, 0.88f, 1.0f), 1.6f));
+    partTag("Privacy wings");
     // privacy wings
     n.box({-0.50f, 1.45f, 0.28f}, {0.04f, 0.62f, 0.30f}, body);
     n.box({0.50f, 1.45f, 0.28f}, {0.04f, 0.62f, 0.30f}, body);
+    partTag("Keypad shelf (tilted)");
     // keypad shelf (sloped)
     Node shelf(s, keypadFrame(m_root));
     shelf.box({0, 0, 0}, {0.96f, 0.05f, 0.30f}, body);
     shelf.box({0, 0.027f, -0.01f}, {0.36f, 0.006f, 0.24f}, Material(Vec3(0.55f, 0.57f, 0.60f), 0.6f, 64.0f).tx(TEX_METAL, 3.0f));
+    partTag("Screen bezel");
     // screen bezel and recess
     n.box({0, SCREEN_Y, SCREEN_Z - 0.012f}, {0.54f, 0.40f, 0.02f}, dark);
+    partTag("Card slot");
     // card slot, receipt slot
     n.box({0.34f, 1.30f, 0.18f}, {0.13f, 0.06f, 0.03f}, dark);
     n.box({0.34f, 1.30f, 0.196f}, {0.10f, 0.008f, 0.004f}, Mat::glow(Vec3(0.2f, 1.0f, 0.4f), 1.2f));
+    partTag("Receipt slot");
     n.box({0.34f, 1.20f, 0.18f}, {0.11f, 0.04f, 0.03f}, dark);
     n.box({0.34f, 1.20f, 0.196f}, {0.08f, 0.004f, 0.004f}, Material(Vec3(0.3f)));
+    partTag("Cash dispenser");
     // cash dispenser shutter
     n.box({0, 0.88f, 0.335f}, {0.40f, 0.10f, 0.02f}, Mat::chrome());
     n.box({0, 0.88f, 0.346f}, {0.32f, 0.03f, 0.004f}, dark);
+    partTag("Camera dome");
     // camera dome, speaker
     n.part(M_HEMISPHERE, {0, 1.73f, SCREEN_Z - 0.01f}, {0.05f, 0.025f, 0.05f}, dark, {90, 0, 0});
+    partTag("Speaker grille");
     for (int i = 0; i < 5; ++i) n.box({-0.34f, 1.24f + i * 0.015f, 0.172f}, {0.08f, 0.005f, 0.004f}, dark);
+    partTag("Kick plate + stripe");
     // kick plate + logo stripe
     n.box({0, 0.15f, 0.335f}, {0.94f, 0.1f, 0.01f}, Mat::steel());
     n.box({0, 0.60f, 0.334f}, {0.94f, 0.04f, 0.01f}, blue);
@@ -302,8 +316,10 @@ void ATM::drawStatic(DrawSink& s) const {
 void ATM::drawDynamic(DrawSink& dyn) const {
     Node n(dyn, m_root);
     auto& is = InteractionSystem::get();
+    partTag("Screen");
     // screen glow surface
     n.box({0, SCREEN_Y, SCREEN_Z - 0.001f}, {SCREEN_W + 0.02f, SCREEN_H + 0.02f, 0.002f}, Mat::glow(Vec3(0.04f, 0.10f, 0.22f), 1.0f));
+    partTag("Side keys");
     // side keys
     for (int i = 0; i < 8; ++i) {
         float x = i < 4 ? -0.245f : 0.245f;
@@ -311,6 +327,7 @@ void ATM::drawDynamic(DrawSink& dyn) const {
         if (is.hovered(m_idBase + i)) m.emission = Vec3(0.2f, 0.4f, 0.6f);
         n.box({x, SIDE_Y[i % 4], SCREEN_Z + 0.004f - m_sideAnim[i] * 0.006f}, {0.04f, 0.03f, 0.016f}, m);
     }
+    partTag("Keypad keys (16)");
     // keypad keys
     Node kf(dyn, keypadFrame(m_root));
     for (int i = 0; i < 16; ++i) {
@@ -324,6 +341,7 @@ void ATM::drawDynamic(DrawSink& dyn) const {
         if (is.hovered(m_idBase + 8 + i)) m.emission = Vec3(0.2f, 0.4f, 0.6f);
         kf.box(keyPos(i) - Vec3(0, m_keyAnim[i] * 0.006f, 0), {0.062f, 0.018f, 0.042f}, m);
     }
+    partTag("Bank card");
     // card (slides in / out of the slot)
     if (m_cardAnim > 0.01f) {
         Material card = Material(Vec3(0.10f, 0.45f, 0.85f), 0.6f, 64.0f);
@@ -334,6 +352,7 @@ void ATM::drawDynamic(DrawSink& dyn) const {
         float blink = (std::fmod(m_time, 0.8f) < 0.4f) ? 2.0f : 0.5f;
         n.box({0.34f, 1.30f, 0.197f}, {0.12f, 0.05f, 0.002f}, Mat::glow(Vec3(0.2f, 1.0f, 0.4f), is.hovered(m_idBase + 24) ? 1.5f : blink * 0.4f));
     }
+    partTag("Bank notes");
     // cash bills
     if (m_cashAnim > 0.01f) {
         for (int i = 0; i < 4; ++i)
@@ -344,6 +363,7 @@ void ATM::drawDynamic(DrawSink& dyn) const {
         float blink = (std::fmod(m_time, 0.8f) < 0.4f) ? 1.5f : 0.3f;
         n.box({0, 0.835f, 0.347f}, {0.32f, 0.008f, 0.004f}, Mat::glow(Vec3(0.2f, 1.0f, 0.4f), blink));
     }
+    partTag("Receipt");
     // receipt paper
     if (m_receiptAnim > 0.01f) {
         Node r = n.at({0.34f, 1.20f, 0.19f}).rotX(25.0f * m_receiptAnim);

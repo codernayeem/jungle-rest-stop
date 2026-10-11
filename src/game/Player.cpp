@@ -68,6 +68,15 @@ void Player::update(GLFWwindow* w, float dt, const CollisionWorld& col, bool inp
     Vec3 right(-std::cos(yr), 0, std::sin(yr));
     Vec3 move = forward * fwd + right * side;
     m_walking = move.length() > 0.01f;
+    if (scripted) {
+        m_walking = scriptWalking;
+        m_running = false;
+        if (m_walking) m_walkPhase += dt * 7.0f;
+        pos.y = std::max(0.0f, terrainHeight(pos.x, pos.z));
+        float targetBob = (m_walking && mode == CAM_FIRST) ? std::sin(m_walkPhase * 2.0f) * 0.02f : 0.0f;
+        m_bob = lerpf(m_bob, targetBob, std::min(1.0f, dt * 12.0f));
+        return;
+    }
     m_running = run;
     if (m_walking) {
         move = normalize(move);

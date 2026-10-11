@@ -19,6 +19,7 @@ struct Vertex {
 struct Mesh {
     GLuint vbo = 0, ebo = 0;
     GLsizei indexCount = 0;
+    GLsizei vertexCount = 0;
     float boundRadius = 0.87f;   // radius of a sphere that contains the unit mesh
     Vec3 boundCenter;            // centre of that sphere (local space)
 };

@@ -401,15 +401,6 @@ void Building::buildRoadAndLot(DrawSink& s, CollisionWorld& col) {
     Furniture::trashBin(w.at({2.9f, 0.06f, 5.6f}), Vec3(0.2f, 0.45f, 0.25f));
     col.addCircle(-2.9f, 5.6f, 0.22f);
     col.addCircle(2.9f, 5.6f, 0.22f);
-    // polished chrome sculpture on a marble pedestal (shows the specular highlight and reflections)
-    {
-        Node sc = w.at({12.2f, 0.06f, 6.9f});
-        sc.box({0, 0.45f, 0}, {0.62f, 0.9f, 0.62f}, Mat::marble(Vec3(0.88f, 0.87f, 0.84f)));
-        sc.box({0, 0.92f, 0}, {0.7f, 0.04f, 0.7f}, Mat::marble(Vec3(0.80f, 0.79f, 0.76f)));
-        sc.sph({0, 1.33f, 0}, Vec3(0.75f), Mat::chrome());
-        sc.torus({0, 0.99f, 0}, {0.95f, 0.7f, 0.95f}, Mat::chrome());   // chrome collar that holds the ball
-        col.addBox(11.85f, 6.55f, 12.55f, 7.25f, 0, 1.9f);
-    }
     // parking sign post
     Node ps = w.at({LOT_X1 + 0.9f, 0, 10.3f});   // on the grass beside the road, not on it
     ps.cyl({0, 1.2f, 0}, {0.08f, 2.4f, 0.08f}, Mat::steel());
@@ -543,12 +534,7 @@ void Building::drawDynamic(DrawSink& dyn, float time, float hour, bool cutaway, 
     float off = 0.6f + 1.15f * m_doorOpen;
     for (int sx = -1; sx <= 1; sx += 2) {
         // one door leaf = glass pane + top and bottom rails + an edge post with the handle
-        Node d = w.at({sx * off, 0, Z_FRONT + 0.18f});
-        d.box({0, 1.3f, 0}, {1.2f, 2.44f, 0.02f}, Mat::glass(0.25f));
-        d.box({0, 2.55f, 0}, {1.24f, 0.10f, 0.05f}, Mat::darkMetal());
-        d.box({0, 0.05f, 0}, {1.24f, 0.10f, 0.05f}, Mat::darkMetal());
-        d.box({-sx * 0.6f, 1.3f, 0}, {0.04f, 2.4f, 0.05f}, Mat::darkMetal());
-        d.box({-sx * 0.5f, 1.05f, 0.045f}, {0.03f, 0.5f, 0.03f}, Mat::chrome());
+        slidingDoorLeaf(w.at({sx * off, 0, Z_FRONT + 0.18f}), sx);
     }
 
     // ---- light fixtures (glow when their group is on) ----
@@ -571,13 +557,13 @@ void Building::drawDynamic(DrawSink& dyn, float time, float hour, bool cutaway, 
     }
     tableLamp(w.at({12.4f, 0.57f, 2.2f}), lib);
     for (int sx = -1; sx <= 1; sx += 2) spotFixture(w.at({sx * 1.4f, 2.99f, 6.4f}), outdoor);
-    // street lamps (only near the camera to save time)
+    // street lamps (all of them, so distant lamps keep glowing)
     for (auto& p : m_lotLamps) {
         float yaw = p.z < 15.0f ? 0.0f : 180.0f;
         streetLamp(w.at(p, {0, yaw, 0}), 5.8f, outdoor);
     }
     for (auto& p : m_roadLamps)
-        if ((p - cam).length() < 110.0f) streetLamp(w.at(p), 5.8f, outdoor);
+        streetLamp(w.at(p), 5.8f, outdoor);
     // glowing bollards along the sidewalk edge
     for (float x : {-15.0f, -12.0f, -3.0f, 3.0f, 12.0f, 15.0f}) bollard(w.at({x, 0.06f, SIDEWALK_Z1 - 0.35f}), outdoor);
 

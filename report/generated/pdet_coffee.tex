@@ -1,0 +1,33 @@
+{\scriptsize\setlength{\tabcolsep}{3pt}
+\begin{longtable}{@{}P{2.6cm} P{1.65cm} r P{2.85cm} P{3.3cm} P{2.05cm} P{1.75cm}@{}}
+\caption{Coffee machine: every part with its basic shape and its transformation $M = T\,R\,S$ (object space, metres and degrees; $\pm$ = mirrored pair, $a\ldots b$ = range over the copies)}\\
+\toprule
+Part & Shape & No. & Scale $S=(s_x,s_y,s_z)$ & Translation $T=(t_x,t_y,t_z)$ & Rotation $R=(\theta_x,\theta_y,\theta_z)$ & Colour / texture \\
+\midrule
+\endfirsthead
+\toprule
+Part & Shape & No. & Scale $S=(s_x,s_y,s_z)$ & Translation $T=(t_x,t_y,t_z)$ & Rotation $R=(\theta_x,\theta_y,\theta_z)$ & Colour / texture \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Base & cube & 1 & (.4, .04, .4) & (0, .02, 0) & -- & \sw{0.06,0.06,0.07} \\
+Steel column & cube & 1 & (.4, .56, .2) & (0, .32, -.1) & -- & \sw{0.62,0.64,0.68} \txs{14} \\
+Side panels & cube & 2 & (.012, .56, .38) & ($\pm$.2, .32, 0) & -- & \sw{0.06,0.06,0.07} \\
+Head unit & cube & 1 & (.43, .16, .4) & (0, .53, 0) & -- & \sw{0.06,0.06,0.07} \\
+LCD screen & cube & 2 & (.18/.19, .055/.062, .002/.004) & (0, .57, .2/.2) & -- & \sw{0.02,0.03,0.05}\sw{0.05,0.12,0.20} glow \\
+Nozzles & cylinder & 2 & (.022, .035, .022) & ($\pm$.025, .43, .09) & -- & \sw{0.86,0.88,0.92} \\
+Drip tray + grill & cube & 7 & (.008/.28, .004/.02, .16/.18) & (-.11$\ldots$.11, .05/.062, .08) & -- & \sw{0.86,0.88,0.92}\sw{0.06,0.06,0.07} \\
+Bean hopper & truncated cone & 1 & (.24, .18, .24) & (0, .7, -.06) & (180, 0, 0) & \sw{0.60,0.50,0.40} glass \\
+Coffee beans & cylinder & 1 & (.17, .09, .17) & (0, .66, -.06) & -- & \sw{0.28,0.16,0.08} \txs{18} \\
+Hopper lid & cylinder & 1 & (.25, .02, .25) & (0, .8, -.06) & -- & \sw{0.06,0.06,0.07} \\
+Water tank & cube & 1 & (.12, .45, .08) & (.12, .33, -.24) & -- & \sw{0.60,0.80,1.00} glass \\
+Chrome trim & cube & 1 & (.4, .008, .004) & (0, .54, .2) & -- & \sw{0.86,0.88,0.92} \\
+Drink buttons & cylinder & 3 & (.04, .012, .04) & (-.11/0/.11, .5, .2/.2) & (90, 0, 0) & \sw{0.35,0.18,0.08}\sw{0.85,0.70,0.50}\sw{0.85,0.45,0.10} \\
+Button rings & torus & 3 & (.062, .04, .062) & (-.11/0/.11, .5, .2) & (90, 0, 0) & \sw{0.86,0.88,0.92} \\
+Status LED & sphere & 1 & (.012, .012, .012) & (.17, .59, .2) & -- & \sw{1.00,0.60,0.10} glow \\
+Cup & truncated cone & 1 & (.085, .09, .085) & (0, .11, .09) & (180, 0, 0) & \sw{0.96,0.96,0.94} \\
+Cup handle & torus & 1 & (.06, .06, .06) & (.05, .11, .09) & (90, 0, 0) & \sw{0.96,0.96,0.94} \\
+Coffee surface & cylinder & 1 & (.067, .003, .067) & (0, .11, .09) & -- & \sw{0.62,0.42,0.27} \\
+Pouring stream & cylinder & 1 & (.006, .3, .006) & (0, .26, .09) & -- & \sw{0.62,0.42,0.27} \\
+\end{longtable}}

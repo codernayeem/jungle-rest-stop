@@ -10,6 +10,8 @@
 #include "../core/Math3D.h"
 #include "Shapes.h"
 #include "Textures.h"
+#include <string>
+#include <vector>
 
 // Material flags (some used by shaders, some by the CPU)
 enum MaterialFlags {
@@ -45,6 +47,17 @@ struct Material {
     Material& fl(int f) { flags |= f; return *this; }
     Material& sp(float s, float sh) { spec = s; shininess = sh; return *this; }
     Material& lv(int l) { lod = l; return *this; }
+};
+
+// Name of the part that is being drawn ("Side panels", "Keypad" ...). Only the
+// report's part tables read it; set it with partTag() before a group of shapes.
+// A TagScope restores the caller's name when an object function returns.
+inline const char*& currentPartTag() { static const char* t = ""; return t; }
+inline void partTag(const char* name) { currentPartTag() = name; }
+struct TagScope {
+    const char* prev;
+    TagScope() : prev(currentPartTag()) {}
+    ~TagScope() { currentPartTag() = prev; }
 };
 
 // Anything that can receive basic-shape instances (static world, per-frame list ...)
@@ -131,6 +144,14 @@ struct LimitSink : DrawSink {
     void add(MeshId mesh, const Mat4& model, const Material& mat) override {
         if (count++ < limit) inner->add(mesh, model, mat);
     }
+};
+
+// Records every shape (mesh, matrix, material and part name) instead of drawing it
+// (used for the report: exploded views and part tables)
+struct PartCollector : DrawSink {
+    struct P { MeshId mesh; Mat4 M; Material m; std::string tag; };
+    std::vector<P> parts;
+    void add(MeshId mesh, const Mat4& M, const Material& m) override { parts.push_back({mesh, M, m, currentPartTag()}); }
 };
 
 // Only counts parts (used to know how many shapes an object is made of)

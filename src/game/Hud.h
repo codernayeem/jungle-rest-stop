@@ -28,6 +28,7 @@ struct HudData {
     bool cursorFree = false;
     bool showHelp = false;
     bool crosshair = true;
+    bool compact = false;     // video: only crosshair, prompt, wallet, ATM steps and messages
     bool textures = true, shadows = true, fog = true, enhanced = true;
 };
 

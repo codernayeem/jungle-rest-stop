@@ -335,50 +335,70 @@ void VendingMachine::drawStatic(DrawSink& s) const {
     Material dark = Mat::black();
 
     // shell
+    partTag("Back panel");
     n.box({0, 1.0f, -0.38f}, {1.0f, 1.86f, 0.04f}, body);
+    partTag("Side panels");
     n.box({-0.48f, 1.0f, 0}, {0.04f, 1.86f, 0.8f}, body);
     n.box({0.48f, 1.0f, 0}, {0.04f, 1.86f, 0.8f}, body);
+    partTag("Top panel");
     n.box({0, 1.93f, 0}, {1.0f, 0.06f, 0.8f}, body);
+    partTag("Base");
     n.box({0, 0.11f, 0}, {1.0f, 0.14f, 0.8f}, body);
+    partTag("Levelling feet");
     for (int i = -1; i <= 1; i += 2)
         for (int j = -1; j <= 1; j += 2) {
             n.cyl({i * 0.42f, 0.025f, j * 0.32f}, {0.06f, 0.05f, 0.06f}, chrome);
         }
     // marquee header (always lit) and trims around the glass
+    partTag("Lit marquee");
     n.box({0, 1.86f, FRONT_Z - 0.002f}, {0.94f, 0.12f, 0.02f}, Mat::glow(bodyCols[m_kind] * 0.5f + Vec3(0.4f), 0.7f));
+    partTag("Glass frame");
     n.box({-0.15f, 1.785f, FRONT_Z - 0.016f}, {0.66f, 0.03f, 0.04f}, trim);
     n.box({-0.15f, 0.645f, FRONT_Z - 0.016f}, {0.66f, 0.03f, 0.04f}, trim);
     n.box({-0.47f, 1.215f, FRONT_Z - 0.016f}, {0.03f, 1.11f, 0.04f}, trim);
     n.box({0.175f, 1.215f, FRONT_Z - 0.016f}, {0.03f, 1.11f, 0.04f}, trim);
     // display cavity + interior tube light (emissive)
+    partTag("Display cavity");
     n.box({-0.15f, 1.22f, -0.35f}, {0.64f, 1.14f, 0.02f}, interior);
     n.box({-0.455f, 1.22f, 0}, {0.01f, 1.14f, 0.7f}, interior);
     n.box({0.16f, 1.22f, 0}, {0.01f, 1.14f, 0.7f}, interior);
     n.box({-0.15f, 1.785f, 0}, {0.64f, 0.02f, 0.7f}, interior);
+    partTag("Tube light");
     n.part(M_CYLINDER, {-0.15f, 1.76f, 0.30f}, {0.022f, 0.6f, 0.022f}, Mat::glow(Vec3(0.92f, 0.97f, 1.0f), 2.2f), {0, 0, 90});
     // shelves with price rails
+    partTag("Shelves + rails");
     for (int r = 0; r < ROWS; ++r) {
         n.box({-0.15f, SHELF_Y[r] - 0.01f, -0.06f}, {0.62f, 0.015f, 0.38f}, shelf);
         n.box({-0.15f, SHELF_Y[r] - 0.02f, 0.13f}, {0.62f, 0.03f, 0.01f}, Material(Vec3(0.12f, 0.12f, 0.14f), 0.3f, 32.0f));
     }
     // glass front (transparent)
+    partTag("Front glass");
     n.box({-0.15f, 1.22f, FRONT_Z - 0.015f}, {0.62f, 1.14f, 0.008f}, Mat::glass(0.18f));
     // control panel plate
+    partTag("Controls/Control panel");
     n.box({0.33f, 1.185f, FRONT_Z - 0.02f}, {0.27f, 1.27f, 0.04f}, trim);
+    partTag("Lower front panel");
     n.box({0.33f, 0.36f, FRONT_Z - 0.02f}, {0.27f, 0.38f, 0.04f}, body);          // panel below the controls
     n.box({0.33f, 0.36f, FRONT_Z + 0.001f}, {0.20f, 0.12f, 0.004f}, Material(Vec3(0.92f), 0.3f, 32.0f));   // service label
+    partTag("Controls/LCD screen");
     n.box({0.33f, 1.66f, FRONT_Z + 0.001f}, {0.24f, 0.11f, 0.004f}, Material(Vec3(0.02f, 0.05f, 0.04f), 0.8f, 96.0f));
+    partTag("Controls/Keypad plate");
     n.box({0.325f, 1.41f, FRONT_Z + 0.001f}, {0.22f, 0.27f, 0.004f}, Material(Vec3(0.12f, 0.12f, 0.14f), 0.3f, 32.0f));
     // coin slot plate, note acceptor, card pad, coin cup recess
+    partTag("Controls/Coin slot");
     n.box({0.30f, 1.23f, FRONT_Z + 0.004f}, {0.07f, 0.09f, 0.008f}, chrome);
     n.box({0.30f, 1.235f, FRONT_Z + 0.009f}, {0.008f, 0.045f, 0.004f}, dark);
+    partTag("Controls/Note acceptor");
     n.box({0.33f, 1.12f, FRONT_Z + 0.004f}, {0.19f, 0.06f, 0.008f}, dark);
     n.box({0.33f, 1.12f, FRONT_Z + 0.009f}, {0.15f, 0.008f, 0.004f}, Mat::glow(Vec3(0.2f, 0.9f, 0.3f), 1.0f));
+    partTag("Controls/Card pad");
     n.box({0.33f, 1.0f, FRONT_Z + 0.004f}, {0.14f, 0.10f, 0.008f}, Material(Vec3(0.15f, 0.18f, 0.25f), 0.4f, 32.0f));
     n.box({0.33f, 1.0f, FRONT_Z + 0.009f}, {0.05f, 0.035f, 0.003f}, Mat::glow(Vec3(0.2f, 0.6f, 1.0f), 0.6f));
+    partTag("Coin cup");
     n.box({0.33f, 0.86f, FRONT_Z - 0.01f}, {0.15f, 0.11f, 0.04f}, chrome);
     n.box({0.33f, 0.86f, FRONT_Z + 0.006f}, {0.11f, 0.07f, 0.01f}, dark);
     // collection bay
+    partTag("Collection bay");
     n.box({-0.15f, BAY_FLOOR_Y - 0.01f, 0.22f}, {0.6f, 0.02f, 0.34f}, Mat::black());
     n.box({-0.15f, 0.40f, 0.06f}, {0.6f, 0.36f, 0.02f}, Mat::black());
     n.box({-0.15f, 0.60f, FRONT_Z - 0.018f}, {0.66f, 0.06f, 0.04f}, trim);
@@ -403,9 +423,11 @@ void VendingMachine::drawDynamic(DrawSink& dyn, const Vec3& cam) const {
                 const Slot& s = m_slots[r * COLS + c];
                 Vec3 sp = slotLocal(r, c);
                 // spiral (rotates about its own axis while vending)
+                partTag("Spirals");
                 n.at({sp.x, sp.y + 0.055f, -0.06f}).rotZ(-s.spin).part(M_COIL, {0, 0, 0}, {1, 1, 1}, coil);
                 for (int k = 0; k < s.stock; ++k) {
                     float z = sp.z - k * ITEM_GAP + s.advance * ITEM_GAP;
+                    partTag("Products");
                     drawProduct(n.at({sp.x, sp.y, z}), s.p);
                 }
             }
@@ -416,6 +438,7 @@ void VendingMachine::drawDynamic(DrawSink& dyn, const Vec3& cam) const {
             drawProduct(it, s.p);
         }
     }
+    partTag("Controls/Keys");
     // keypad buttons (pushed in when pressed, glow when hovered)
     for (int k = 0; k < 9; ++k) {
         Vec3 p = keyLocal(k) + Vec3(0, 0, 0.008f - m_keyAnim[k] * 0.007f);
@@ -430,22 +453,27 @@ void VendingMachine::drawDynamic(DrawSink& dyn, const Vec3& cam) const {
     hl(9, {0.30f, 1.23f, FRONT_Z + 0.012f}, {0.075f, 0.095f, 0.002f});
     hl(10, {0.33f, 1.12f, FRONT_Z + 0.012f}, {0.20f, 0.065f, 0.002f});
     hl(12, {0.33f, 0.86f, FRONT_Z + 0.012f}, {0.16f, 0.12f, 0.002f});
+    partTag("Controls/Coin-return lever");
     // coin return lever
     n.at({0.42f, 1.25f, FRONT_Z + 0.01f}).rotX(m_slotAnim[2] * 40.0f).part(M_CUBE, {0, -0.02f, 0.01f}, {0.02f, 0.05f, 0.02f},
                                                                           is.hovered(m_idBase + 11) ? Mat::glow(Vec3(0.6f, 0.8f, 1.0f), 0.6f) : Mat::chrome());
+    partTag("Controls/Status LEDs");
     // status LEDs
     bool busy = m_state == VENDING || m_state == DROPPING;
     n.sph({0.26f, 1.585f, FRONT_Z + 0.01f}, Vec3(0.022f), Mat::glow(Vec3(0.2f, 1.0f, 0.3f), busy ? 0.15f : 1.6f));
     n.sph({0.33f, 1.585f, FRONT_Z + 0.01f}, Vec3(0.022f), Mat::glow(Vec3(1.0f, 0.65f, 0.1f), busy ? (std::fmod(m_time, 0.4f) < 0.2f ? 2.0f : 0.4f) : 0.12f));
     n.sph({0.40f, 1.585f, FRONT_Z + 0.01f}, Vec3(0.022f), Mat::glow(Vec3(0.2f, 0.6f, 1.0f), m_state == READY ? 2.0f : 0.12f));
+    partTag("Collection flap");
     // collection flap (hinged at the top, swings inward)
     Node flap = n.at({-0.15f, 0.57f, FRONT_Z - 0.01f}).rotX(m_flap);
     Material flapM = Material(Vec3(0.18f, 0.19f, 0.22f), 0.5f, 48.0f);
     if (is.hovered(m_idBase + 13)) flapM.emission = Vec3(0.1f, 0.25f, 0.35f);
     flap.box({0, -0.17f, 0}, {0.58f, 0.34f, 0.015f}, flapM);
     flap.box({0, -0.17f, 0.01f}, {0.22f, 0.06f, 0.004f}, Material(Vec3(0.9f), 0.4f, 32.0f));
+    partTag("Change coins");
     // coins resting in the cup
     for (const auto& c : m_coins) n.cyl(c.pos, {0.024f, 0.004f, 0.024f}, Material(Vec3(0.85f, 0.75f, 0.35f), 0.9f, 96.0f));
+    partTag("Controls/LCD screen");
     // LCD glow surface
     n.box({0.33f, 1.66f, FRONT_Z + 0.004f}, {0.22f, 0.09f, 0.002f}, Mat::glow(Vec3(0.02f, 0.10f, 0.06f), 1.0f));
 }

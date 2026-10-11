@@ -28,7 +28,3 @@ t=  60.9s  visitor 4 (spot  0): getting out
 t=  63.2s  visitor 4 (spot  0): walking in
 t=  69.6s  visitor 5 (spot 14): waiting to park
 t=  69.7s  visitor 5 (spot 14): parking
-t=  69.9s  visitor 0 (spot 18): leaving
-t=  73.4s  visitor 2 (spot 13): at a vending machine
-t=  73.9s  visitor 1 (spot 10): leaving
-t=  74.5s  visitor 5 (spot 14): getting out

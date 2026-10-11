@@ -34,5 +34,6 @@ void stanchion(const Node& n);
 void securityCamera(const Node& n, float t);
 void smokeDetector(const Node& n);
 void acUnit(const Node& n);                                            // roof air conditioner
+void slidingDoorLeaf(const Node& n, int side);                        // one leaf of the entrance door
 void signBoard(const Node& n, float w, float h, const Vec3& color, bool lit);
 }  // namespace Furniture

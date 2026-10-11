@@ -246,6 +246,7 @@ static Mesh upload(const std::vector<Vertex>& v, const std::vector<GLuint>& i) {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     m.indexCount = (GLsizei)i.size();
+    m.vertexCount = (GLsizei)v.size();
     // bounding sphere from vertices
     Vec3 mn(1e9f), mx(-1e9f);
     for (auto& vv : v) {

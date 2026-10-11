@@ -121,6 +121,8 @@ HumanLook randomLook(unsigned seed) { return look((int)(seed % 2)); }
 
 // ---------------------------------------------------------------- model ------
 static void heldItem(const Node& hand, HeldItem item) {
+    TagScope tagScope;
+    partTag("Held item");
     switch (item) {
         case HELD_CAN:
             hand.cyl({0, -0.06f, 0.03f}, {0.065f, 0.12f, 0.065f}, Material(Vec3(0.8f, 0.1f, 0.1f), 0.7f, 64.0f));
@@ -142,6 +144,7 @@ static void heldItem(const Node& hand, HeldItem item) {
 }
 
 void draw(const Node& root0, const HumanLook& L, const HumanPose& P, HeldItem held) {
+    TagScope tagScope;
     const float w = L.width;
     Node root = root0.scl(Vec3(L.height, L.height, L.height));
     Material skin(L.skin, 0.15f, 16.0f);
@@ -153,52 +156,76 @@ void draw(const Node& root0, const HumanLook& L, const HumanPose& P, HeldItem he
 
     Node pelvis = root.at({0, 0.93f - P.pelvisDrop + P.bob, 0});
     // with a kurta the hips are covered by the top, so no belt and no trouser band shows
+    partTag("Pelvis");
     pelvis.cyl({0, 0.02f, 0}, {0.34f * w, 0.18f, 0.21f}, L.skirt ? shirt : pants);
+    partTag("Belt");
     if (!L.skirt) pelvis.box({0, 0.10f, 0}, {0.335f * w, 0.035f, 0.205f}, Material(Vec3(0.12f, 0.08f, 0.05f), 0.4f, 32.0f));  // belt
 
     // ---------------- legs ----------------
     for (int side = -1; side <= 1; side += 2) {
         bool left = side > 0;   // +X is the character's left (it faces +Z)
         Node hip = pelvis.at({side * 0.092f * w, -0.03f, 0}).rotX(left ? P.thighL : P.thighR);
+        partTag("Hip joints");
         hip.sph({0, 0, 0}, {0.16f * w, 0.16f, 0.17f}, pants);                                  // hip joint
+        partTag("Thighs");
         hip.tcone({0, -0.225f, 0}, {0.17f * w, 0.45f, 0.17f}, pants, {180, 0, 0});             // thigh (wide at the hip)
         Node knee = hip.at({0, -0.45f, 0}).rotX(left ? P.kneeL : P.kneeR);
+        partTag("Knees");
         knee.sph({0, 0, 0}, {0.12f * w, 0.12f, 0.125f}, pants);
+        partTag("Shins");
         knee.tcone({0, -0.21f, 0}, {0.135f * w, 0.42f, 0.135f}, pants, {180, 0, 0});           // shin (calf at the top)
         Node ankle = knee.at({0, -0.42f, 0}).rotX(-(left ? P.kneeL : P.kneeR) * 0.3f - (left ? P.thighL : P.thighR) * 0.4f);
+        partTag("Ankles");
         ankle.sph({0, 0, 0}, Vec3(0.075f), pants);
+        partTag("Shoes");
         ankle.box({0, -0.025f, 0.045f}, {0.11f, 0.07f, 0.26f}, shoe);
         ankle.part(M_CYLINDER, {0, -0.025f, 0.172f}, {0.07f, 0.11f, 0.06f}, shoe, {0, 0, 90});   // rounded toe
         ankle.box({0, -0.058f, 0.045f}, {0.115f, 0.015f, 0.265f}, Material(Vec3(0.9f), 0.2f, 16.0f));
     }
+    partTag("Kurta hem");
     if (L.skirt) pelvis.tcone({0, -0.17f, 0}, {0.40f * w, 0.36f, 0.30f}, shirt, {180, 0, 0});   // kurta hem
 
     // ---------------- torso ----------------
     Node torso = pelvis.at({0, 0.08f, 0}).rotX(P.torsoPitch);
+    partTag("Waist");
     torso.cyl({0, 0.10f, 0}, {0.30f * w, 0.22f, 0.19f}, shirt);                       // waist (elliptic cylinder)
+    partTag("Chest");
     torso.part(M_FRUSTUM_BOX, {0, 0.30f, 0}, {0.42f * w, 0.30f, 0.23f}, shirt, {0, 0, 180});   // chest: tapered box upside down (V shape)
+    partTag("Shoulder line");
     torso.part(M_CYLINDER, {0, 0.425f, 0}, {0.12f, 0.40f * w, 0.17f}, shirt, {0, 0, 90});      // rounded shoulder line
+    partTag("Shoulder joints");
     for (int side = -1; side <= 1; side += 2) torso.sph({side * 0.215f * w, 0.425f, 0}, Vec3(0.115f), shirt);   // shoulder joints
+    partTag("Collar");
     torso.part(M_TORUS, {0, 0.47f, 0}, {0.2f, 0.12f, 0.17f}, shirt);                 // collar ring
 
     // ---------------- head ----------------
     Node neck = torso.at({0, 0.46f, 0});
+    partTag("Neck");
     neck.cyl({0, 0.04f, 0}, {0.095f, 0.09f, 0.095f}, skin);
     Node head = neck.at({0, 0.065f, 0}).rotY(P.headYaw).rotX(P.headPitch);
+    partTag("Head/Jaw");
     head.sph({0, 0.03f, 0.03f}, {0.13f, 0.09f, 0.12f}, skin);                           // jaw / chin
+    partTag("Head/Head");
     head.sph({0, 0.105f, 0.005f}, {0.20f, 0.245f, 0.215f}, skin);
+    partTag("Head/Nose");
     head.sph({0, 0.085f, 0.105f}, {0.032f, 0.045f, 0.04f}, skin);                      // nose
     for (int e = -1; e <= 1; e += 2) {
+        partTag("Head/Eyes");
         head.sph({e * 0.042f, 0.125f, 0.092f}, Vec3(0.026f), Material(Vec3(0.95f), 0.4f, 32.0f));   // eye white
         head.sph({e * 0.042f, 0.125f, 0.103f}, Vec3(0.014f), dark);                                 // pupil
+        partTag("Head/Eyebrows");
         head.box({e * 0.042f, 0.158f, 0.098f}, {0.04f, 0.008f, 0.01f}, hair);                       // eyebrow
+        partTag("Head/Ears");
         head.sph({e * 0.102f, 0.10f, 0.0f}, {0.03f, 0.055f, 0.035f}, skin);                         // ear
     }
+    partTag("Head/Mouth");
     head.box({0, 0.045f, 0.098f}, {0.05f, 0.009f, 0.01f}, Material(L.skin * 0.7f + Vec3(0.12f, 0.0f, 0.0f), 0.2f, 16.0f));  // mouth
+    partTag("Head/Glasses");
     if (L.glasses) {
         for (int e = -1; e <= 1; e += 2) head.torus({e * 0.042f, 0.125f, 0.112f}, {0.07f, 0.07f, 0.07f}, dark, {90, 0, 0});
         head.box({0, 0.128f, 0.113f}, {0.03f, 0.006f, 0.006f}, dark);
     }
+    partTag("Head/Hair");
     switch (L.hairStyle) {
         case 0:
             head.part(M_HEMISPHERE, {0, 0.12f, -0.018f}, {0.215f, 0.25f, 0.232f}, hair);
@@ -224,12 +251,16 @@ void draw(const Node& root0, const HumanLook& L, const HumanPose& P, HeldItem he
     for (int side = -1; side <= 1; side += 2) {
         bool left = side > 0;
         Node sh = torso.at({side * 0.225f * w, 0.42f, 0}).rotX(left ? P.shoulderL : P.shoulderR).rotZ(side * (left ? P.armOutL : P.armOutR));
+        partTag("Upper arms");
         sh.tcone({0, -0.145f, 0}, {0.11f, 0.29f, 0.11f}, shirt, {180, 0, 0});               // upper arm (thicker at the shoulder)
         Node el = sh.at({0, -0.29f, 0}).rotX(left ? P.elbowL : P.elbowR);
         Material lower = L.longSleeve ? shirt : skin;
+        partTag("Elbows");
         el.sph({0, 0, 0}, Vec3(0.078f), lower);
+        partTag("Forearms");
         el.tcone({0, -0.13f, 0}, {0.088f, 0.26f, 0.088f}, lower, {180, 0, 0});               // forearm (thinner at the wrist)
         Node hand = el.at({0, -0.29f, 0});
+        partTag("Hands");
         hand.sph({0, 0, 0.005f}, {0.068f, 0.10f, 0.045f}, skin);
         hand.sph({-side * 0.022f, 0.01f, 0.028f}, {0.025f, 0.05f, 0.025f}, skin, {-20, 0, 0});   // thumb
         if (!left) heldItem(hand, held);

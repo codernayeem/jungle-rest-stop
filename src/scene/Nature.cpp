@@ -14,13 +14,16 @@ Vec3 jitterColor(const Vec3& c, Rng& r, float amt) {
 // straight through), then many alpha-tested leaf cards, each turned randomly
 // in 3D and placed on an ellipsoid shell, make the leafy outline.
 void leafCrown(const Node& n, const Vec3& c, const Vec3& radii, float s, const Vec3& leafCol, Rng& rng, int cards) {
+    TagScope tagScope;
     Material core = Material(leafCol * 0.38f, 0.02f, 4.0f).fl(MF_FOLIAGE);
     int cores = 3;
+    partTag("Crown core blobs");
     for (int k = 0; k < cores; ++k) {
         Vec3 p = c + Vec3(rng.range(-0.35f, 0.35f) * radii.x, rng.range(-0.3f, 0.2f) * radii.y, rng.range(-0.35f, 0.35f) * radii.z);
         n.part(M_SPHERE_LOW, p, Vec3(radii.x, radii.y, radii.z) * rng.range(0.55f, 0.7f), core,
                {0, rng.range(0.0f, 180.0f), 0});
     }
+    partTag("Leaf cards");
     for (int q = 0; q < cards; ++q) {
         float th = rng.range(0.0f, 2.0f * PI), y = rng.range(-0.55f, 1.0f);
         float rr = std::sqrt(std::max(0.0f, 1.0f - y * y));
@@ -38,13 +41,17 @@ void leafCrown(const Node& n, const Vec3& c, const Vec3& radii, float s, const V
 // 3 angled branches, each ending in a foliage blob with leaf cards around it
 // -----------------------------------------------------------------------------
 void rainforestTree(const Node& n, float s, Rng& rng) {
+    TagScope tagScope;
     Material bark = Mat::bark(jitterColor(Vec3(0.36f, 0.28f, 0.20f), rng, 0.15f));
     Vec3 leafCol = jitterColor(Vec3(0.24f, 0.46f, 0.16f), rng, 0.2f);
     float H = rng.range(6.5f, 9.0f) * s;
 
     // trunk (two stacked cylinders) and buttress-root fins (wedges)
+    partTag("Trunk");
     n.part(M_CYLINDER_LOW, {0, H * 0.5f, 0}, {0.62f * s, H, 0.62f * s}, bark);
+    partTag("Upper trunk");
     n.part(M_CYLINDER_LOW, {0, H + 0.8f * s, 0}, {0.42f * s, 1.8f * s, 0.42f * s}, bark);
+    partTag("Buttress roots");
     for (int i = 0; i < 4; ++i) {
         Node fin = n.rotY(i * 90.0f + rng.range(-20.0f, 20.0f));
         fin.part(M_WEDGE, {0, 0.75f * s, 0.6f * s}, {0.13f * s, 1.5f * s, 1.2f * s}, bark);
@@ -55,11 +62,13 @@ void rainforestTree(const Node& n, float s, Rng& rng) {
         float yaw = b * 120.0f + rng.range(-25.0f, 25.0f);
         float len = rng.range(2.0f, 2.8f) * s;
         Node br = n.at({0, H * rng.range(0.80f, 0.95f), 0}, {0, yaw, 0}).rotX(rng.range(45.0f, 60.0f));
+        partTag("Branches");
         br.part(M_CYLINDER_LOW, {0, len * 0.5f, 0}, {0.2f * s, len, 0.2f * s}, bark);
         if (rng.chance(0.35f)) {   // hanging vine (world aligned, hangs straight down)
             float vl = rng.range(2.5f, 4.5f) * s;
             Vec3 tip = br.worldPos(Vec3(0, len * 0.9f, 0));
             Node vw(*n.sink, translate(Mat4(), tip));
+            partTag("Hanging vine");
             vw.part(M_QUAD, {0, -vl * 0.5f, 0}, {0.6f * s, vl, 1}, Mat::leafCard(leafCol * 0.9f, TEX_VINE).lv(1), {0, rng.range(0.0f, 180.0f), 0});
         }
     }
@@ -71,6 +80,7 @@ void rainforestTree(const Node& n, float s, Rng& rng) {
 // the previous one (hierarchical bend), crown of arched 2-part fronds
 // -----------------------------------------------------------------------------
 void palmTree(const Node& n, float s, Rng& rng) {
+    TagScope tagScope;
     Material bark = Mat::bark(jitterColor(Vec3(0.52f, 0.44f, 0.34f), rng, 0.1f)).tx(TEX_BARK, 2.5f);
     Material ring = Mat::matte(Vec3(0.30f, 0.25f, 0.19f));
     Vec3 frondCol = jitterColor(Vec3(0.34f, 0.52f, 0.18f), rng, 0.15f);
@@ -81,21 +91,27 @@ void palmTree(const Node& n, float s, Rng& rng) {
     float L = rng.range(1.1f, 1.45f) * s;
     for (int i = 0; i < segs; ++i) {
         float r = (0.36f - i * 0.022f) * s;
+        partTag("Trunk segments");
         seg.part(M_CYLINDER_LOW, {0, L * 0.5f, 0}, {r, L, r}, bark);
+        partTag("Segment rings");
         seg.part(M_CYLINDER_LOW, {0, L * 0.98f, 0}, {r * 1.12f, 0.08f * s, r * 1.12f}, ring);
         seg = seg.at({0, L, 0}).rotX(bend);
     }
     // crown
     Node crown = seg.rotX(-bend * segs * 0.8f);
+    partTag("Crown heart");
     crown.part(M_SPHERE_LOW, {0, 0.1f * s, 0}, {0.55f * s, 0.6f * s, 0.55f * s}, Mat::matte(frondCol * 0.6f));
     int fronds = 9;
     for (int f = 0; f < fronds; ++f) {
         float len = rng.range(1.6f, 2.1f) * s;
         Node fr = crown.rotY(f * (360.0f / fronds) + rng.range(-12.0f, 12.0f)).rotX(rng.range(55.0f, 70.0f));
+        partTag("Fronds (inner half)");
         fr.part(M_QUAD, {0, len * 0.5f, 0}, {1.0f * s, len, 1}, frond);
         Node fr2 = fr.at({0, len * 0.98f, 0}).rotX(rng.range(30.0f, 45.0f));
+        partTag("Fronds (outer half)");
         fr2.part(M_QUAD, {0, len * 0.5f, 0}, {0.85f * s, len, 1}, frond);
     }
+    partTag("Coconuts");
     for (int c = 0; c < 4; ++c)
         crown.part(M_SPHERE_LOW, {std::cos(c * 1.6f) * 0.28f * s, -0.15f * s, std::sin(c * 1.6f) * 0.28f * s}, Vec3(0.26f * s),
                    Mat::plastic(Vec3(0.40f, 0.36f, 0.12f)));
@@ -105,10 +121,13 @@ void palmTree(const Node& n, float s, Rng& rng) {
 // Emergent giant: very tall trunk, large buttresses, wide flat umbrella canopy
 // -----------------------------------------------------------------------------
 void emergentTree(const Node& n, float s, Rng& rng) {
+    TagScope tagScope;
     Material bark = Mat::bark(jitterColor(Vec3(0.55f, 0.50f, 0.44f), rng, 0.1f));
     Vec3 leafCol = jitterColor(Vec3(0.20f, 0.42f, 0.17f), rng, 0.15f);
     float H = rng.range(14.0f, 18.0f) * s;
+    partTag("Trunk");
     n.part(M_CYLINDER_LOW, {0, H * 0.5f, 0}, {0.95f * s, H, 0.95f * s}, bark);
+    partTag("Buttress roots");
     for (int i = 0; i < 5; ++i) {
         Node fin = n.rotY(i * 72.0f + rng.range(-15.0f, 15.0f));
         fin.part(M_WEDGE, {0, 1.3f * s, 1.0f * s}, {0.2f * s, 2.6f * s, 2.0f * s}, bark);
@@ -116,6 +135,7 @@ void emergentTree(const Node& n, float s, Rng& rng) {
     for (int b = 0; b < 4; ++b) {
         float len = rng.range(3.0f, 4.2f) * s;
         Node br = n.at({0, H * 0.92f, 0}, {0, b * 90.0f + rng.range(-20.0f, 20.0f), 0}).rotX(rng.range(55.0f, 68.0f));
+        partTag("Branches");
         br.part(M_CYLINDER_LOW, {0, len * 0.5f, 0}, {0.3f * s, len, 0.3f * s}, bark);
     }
     // broad, flat umbrella crown
@@ -123,6 +143,7 @@ void emergentTree(const Node& n, float s, Rng& rng) {
 }
 
 void bambooClump(const Node& n, float s, Rng& rng) {
+    TagScope tagScope;
     Material culm = Material(jitterColor(Vec3(0.55f, 0.62f, 0.25f), rng, 0.1f), 0.35f, 40.0f);
     Material node = Mat::matte(Vec3(0.40f, 0.42f, 0.18f)).lv(1);
     Material cards = Mat::leafCard(Vec3(0.40f, 0.58f, 0.20f)).lv(1);
@@ -131,8 +152,11 @@ void bambooClump(const Node& n, float s, Rng& rng) {
         float a = rng.range(0.0f, 2 * PI), r = rng.range(0.0f, 0.9f) * s;
         float h = rng.range(6.0f, 9.5f) * s;
         Node c = n.at({std::cos(a) * r, 0, std::sin(a) * r}, {rng.range(-8.0f, 8.0f), rng.range(0.0f, 360.0f), rng.range(-8.0f, 8.0f)});
+        partTag("Culms");
         c.part(M_CYLINDER_LOW, {0, h * 0.5f, 0}, {0.11f * s, h, 0.11f * s}, culm);
+        partTag("Node rings");
         for (float y = 1.1f * s; y < h - 0.5f; y += 1.3f * s) c.part(M_CYLINDER_LOW, {0, y, 0}, {0.125f * s, 0.05f * s, 0.125f * s}, node);
+        partTag("Leaf cards");
         for (int k = 0; k < 2; ++k)
             c.part(M_LEAVES, {rng.range(-0.4f, 0.4f) * s, h - rng.range(0.3f, 1.8f) * s, rng.range(-0.4f, 0.4f) * s}, Vec3(1.7f * s), cards,
                    {0, rng.range(0.0f, 180.0f), 0});
@@ -140,6 +164,7 @@ void bambooClump(const Node& n, float s, Rng& rng) {
 }
 
 void bananaPlant(const Node& n, float s, Rng& rng) {
+    TagScope tagScope;
     Material stem = Mat::matte(Vec3(0.42f, 0.48f, 0.22f));
     Vec3 lc = jitterColor(Vec3(0.30f, 0.55f, 0.16f), rng, 0.15f);
     Material leaf = Material(lc, 0.2f, 24.0f).fl(MF_FOLIAGE | MF_WIND);
@@ -147,31 +172,39 @@ void bananaPlant(const Node& n, float s, Rng& rng) {
     for (int st = 0; st < stems; ++st) {
         float h = rng.range(1.8f, 2.6f) * s;
         Node b = n.at({rng.range(-0.4f, 0.4f) * s, 0, rng.range(-0.4f, 0.4f) * s});
+        partTag("Pseudo-stems");
         b.part(M_CYLINDER_LOW, {0, h * 0.5f, 0}, {0.22f * s, h, 0.22f * s}, stem);
         Node top = b.at({0, h, 0});
         int leaves = rng.irange(5, 8);
         for (int l = 0; l < leaves; ++l) {
             Node lf = top.rotY(l * (360.0f / leaves) + rng.range(-15.0f, 15.0f)).rotX(rng.range(-35.0f, 15.0f));
+            partTag("Leaves");
             lf.part(M_SPHERE_LOW, {0, 0.05f * s, 0.95f * s}, {0.55f * s, 0.04f * s, 1.9f * s}, leaf);
         }
         if (rng.chance(0.4f)) {
+            partTag("Bunch stalk");
             top.part(M_CYLINDER_LOW, {0.15f * s, -0.4f * s, 0.15f * s}, {0.08f * s, 0.6f * s, 0.08f * s}, stem, {20, 0, 0});
+            partTag("Banana bunch");
             top.part(M_SPHERE_LOW, {0.18f * s, -0.75f * s, 0.25f * s}, {0.3f * s, 0.45f * s, 0.3f * s}, Mat::matte(Vec3(0.55f, 0.62f, 0.2f)));
         }
     }
 }
 
 void bush(const Node& n, float s, Rng& rng) {
+    TagScope tagScope;
     Vec3 lc = jitterColor(Vec3(0.24f, 0.44f, 0.15f), rng, 0.25f);
     Material core = Material(lc * 0.38f, 0.02f, 4.0f).fl(MF_FOLIAGE).lv(1);
+    partTag("Dark core");
     n.part(M_SPHERE_LOW, {0, 0.38f * s, 0}, Vec3(1.1f * s, 0.7f * s, 1.1f * s), core, {0, rng.range(0.0f, 180.0f), 0});
     int k = rng.irange(5, 7);
+    partTag("Leaf cards");
     for (int i = 0; i < k; ++i) {
         float th = rng.range(0.0f, 2.0f * PI), r = rng.range(0.15f, 0.55f) * s;
         Vec3 p(std::cos(th) * r, rng.range(0.35f, 0.75f) * s, std::sin(th) * r);
         n.part(M_LEAVES, p, Vec3(rng.range(1.0f, 1.4f) * s), Mat::leafCard(lc * rng.range(0.85f, 1.15f)).lv(1),
                {rng.range(-30.0f, 30.0f), rng.range(0.0f, 180.0f), rng.range(-30.0f, 30.0f)});
     }
+    partTag("Flowers");
     if (rng.chance(0.3f)) {  // flowering bush
         Vec3 fc = rng.chance(0.5f) ? Vec3(0.95f, 0.25f, 0.35f) : Vec3(0.98f, 0.75f, 0.2f);
         for (int i = 0; i < 6; ++i)
@@ -181,15 +214,20 @@ void bush(const Node& n, float s, Rng& rng) {
 }
 
 void fern(const Node& n, float s) {
+    TagScope tagScope;
     Material f = Mat::leafCard(Vec3(0.30f, 0.52f, 0.18f), TEX_FERN).lv(1);
+    partTag("Arched fronds");
     for (int i = 0; i < 5; ++i)
         n.rotY(i * 72.0f).part(M_QUAD, {0, 0.3f * s, 0.32f * s}, {0.55f * s, 0.9f * s, 1}, f, {55, 0, 0});
+    partTag("Centre cross card");
     n.part(M_CROSS, {0, 0, 0}, {0.8f * s, 0.7f * s, 0.8f * s}, f);
 }
 
 void rock(const Node& n, float s, Rng& rng) {
+    TagScope tagScope;
     Material m = Material(jitterColor(Vec3(0.48f, 0.46f, 0.43f), rng, 0.15f), 0.1f, 16.0f).tx(TEX_ROCK, 0.6f);
     int k = rng.irange(1, 3);
+    partTag("Rock lumps");
     for (int i = 0; i < k; ++i)
         n.part(M_SPHERE_LOW, {rng.range(-0.4f, 0.4f) * s, 0.1f * s, rng.range(-0.4f, 0.4f) * s},
                {rng.range(0.8f, 1.6f) * s, rng.range(0.5f, 0.9f) * s, rng.range(0.8f, 1.4f) * s}, m,
@@ -197,15 +235,20 @@ void rock(const Node& n, float s, Rng& rng) {
 }
 
 void fallenLog(const Node& n, float len, Rng& rng) {
+    TagScope tagScope;
     Material bark = Mat::bark(Vec3(0.30f, 0.23f, 0.16f));
     float r = rng.range(0.35f, 0.55f);
+    partTag("Log");
     n.part(M_CYLINDER_LOW, {0, r * 0.45f, 0}, {r, len, r}, bark, {0, 0, 90});
     Material moss = Mat::matte(Vec3(0.25f, 0.42f, 0.14f)).lv(1);
+    partTag("Moss");
     for (int i = 0; i < 3; ++i)
         n.part(M_SPHERE_LOW, {rng.range(-len * 0.4f, len * 0.4f), r * 0.85f, rng.range(-0.1f, 0.1f)}, {0.6f, 0.12f, r * 0.8f}, moss);
     for (int i = 0; i < 3; ++i) {
         Vec3 p(rng.range(-len * 0.3f, len * 0.3f), r * 0.3f, r * 0.45f);
+        partTag("Mushroom stems");
         n.part(M_CYLINDER_LOW, p, {0.035f, 0.12f, 0.035f}, Mat::matte(Vec3(0.9f, 0.88f, 0.8f)).lv(2));
+        partTag("Mushroom caps");
         n.part(M_HEMISPHERE, p + Vec3(0, 0.06f, 0), {0.14f, 0.08f, 0.14f}, Mat::matte(Vec3(0.75f, 0.35f, 0.15f)).lv(2));
     }
 }
@@ -322,6 +365,19 @@ void buildGarden(DrawSink& s, CollisionWorld& col) {
             bush(Node(s, translate(Mat4(), Vec3(side * (LOT_X1 + 1.6f), 0, z))), 0.8f, rng);
 }
 
+// Bird: body + beak + two wings in child nodes rotated by +-flap about the body axis
+void bird(const Node& n, float flapDeg) {
+    TagScope tagScope;
+    Material body = Mat::matte(Vec3(0.12f, 0.1f, 0.09f));
+    partTag("Body");
+    n.part(M_SPHERE_LOW, {0, 0, 0}, {0.18f, 0.16f, 0.5f}, body);
+    partTag("Beak");
+    n.part(M_CONE, {0, 0.02f, 0.3f}, {0.06f, 0.14f, 0.06f}, Mat::matte(Vec3(0.8f, 0.6f, 0.1f)), {90, 0, 0});
+    partTag("Wings");
+    n.rotZ(flapDeg).part(M_CUBE, {0.35f, 0, 0}, {0.7f, 0.02f, 0.28f}, body);
+    n.rotZ(-flapDeg).part(M_CUBE, {-0.35f, 0, 0}, {0.7f, 0.02f, 0.28f}, body);
+}
+
 // -----------------------------------------------------------------------------
 // Wildlife
 // -----------------------------------------------------------------------------
@@ -362,16 +418,10 @@ void Wildlife::draw(DrawSink& dyn, float night, float t) const {
     }
     // birds: body + two flapping wings (hierarchical) circling over the jungle
     if (night < 0.6f) {
-        Material body = Mat::matte(Vec3(0.12f, 0.1f, 0.09f));
         for (const auto& b : m_birds) {
             Vec3 p = b.center + Vec3(std::cos(b.angle) * b.radius, b.height + std::sin(b.angle * 2.0f) * 1.5f, std::sin(b.angle) * b.radius);
             float heading = toDegrees(std::atan2(-std::sin(b.angle) * b.speed, std::cos(b.angle) * b.speed));
-            Node n(dyn, rotateYXZ(translate(Mat4(), p), {0, heading, 0}));
-            n.part(M_SPHERE_LOW, {0, 0, 0}, {0.18f, 0.16f, 0.5f}, body);
-            n.part(M_CONE, {0, 0.02f, 0.3f}, {0.06f, 0.14f, 0.06f}, Mat::matte(Vec3(0.8f, 0.6f, 0.1f)), {90, 0, 0});
-            float flap = std::sin(b.flap) * 35.0f;
-            n.rotZ(flap).part(M_CUBE, {0.35f, 0, 0}, {0.7f, 0.02f, 0.28f}, body);
-            n.rotZ(-flap).part(M_CUBE, {-0.35f, 0, 0}, {0.7f, 0.02f, 0.28f}, body);
+            bird(Node(dyn, rotateYXZ(translate(Mat4(), p), {0, heading, 0})), std::sin(b.flap) * 35.0f);
         }
     }
 }

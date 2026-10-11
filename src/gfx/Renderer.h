@@ -72,8 +72,8 @@ struct FrameInfo {
 
 class Renderer {
 public:
-    static const int MAX_POINT = 16;
-    static const int MAX_SPOT = 8;
+    static const int MAX_POINT = 32;
+    static const int MAX_SPOT = 16;
 
     bool init(float (*heightFn)(float, float));
     void shutdown();
@@ -91,6 +91,7 @@ public:
     // Frame passes
     void beginFrame(const FrameInfo& f, int width, int height);  // uploads + shadow + sky + opaque
     void drawTransparent();                                      // sorted blended objects
+    void drawWireOverlay(const Vec3& color);                     // triangle edges of the dynamic objects
     void endFrame();                                             // clears dynamic lists
 
     const Mesh& mesh(MeshId id) const { return m_meshes[id]; }

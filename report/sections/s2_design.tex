@@ -1,0 +1,74 @@
+% =============================================================================
+\section{System Design}
+\subsection{Modules}
+The code is divided into small modules, each with a single responsibility (\Cref{fig:modules}).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[mod/.style={draw,rounded corners=3pt,align=center,font=\footnotesize,inner sep=4pt,text width=3.2cm,minimum height=2.3cm,anchor=north},
+  wide/.style={draw,rounded corners=3pt,align=center,font=\small,inner sep=4pt,text width=15.2cm,minimum height=0.8cm}]
+\node[wide,fill=orange!15] (app) at (0,0) {\textbf{app/} \quad App: main loop, input, frame cap \qquad Showcase: report figures \qquad Cinematic: video};
+\node[mod,fill=yellow!15] (game) at (-5.7,-1.0) {\textbf{game/}\\Player, cameras\\Picking, Collision\\DayNight, HUD\\Inventory, Audio};
+\node[mod,fill=green!12] (scene) at (-1.9,-1.0) {\textbf{scene/}\\Layout, Building\\Furniture\\Nature (jungle)\\Lights, Materials};
+\node[mod,fill=cyan!12] (objects) at (1.9,-1.0) {\textbf{objects/}\\VendingMachine\\ATM, Coffee, TV\\Aquarium\\Products};
+\node[mod,fill=purple!10] (actors) at (5.7,-1.0) {\textbf{actors/}\\Human\\Car\\Visitors (NPC AI)};
+\node[wide,fill=blue!10] (gfx) at (0,-4.4) {\textbf{gfx/} \quad Shapes (basic meshes) $\cdot$ Draw (Node, Material) $\cdot$ Renderer $\cdot$ Textures $\cdot$ Text $\cdot$ Shader};
+\node[wide,fill=gray!12] (core) at (0,-5.7) {\textbf{core/} \quad Math3D: vectors, matrices, translate / rotate / scale, frustum, noise, random};
+\foreach \n in {game,scene,objects,actors} {
+  \draw[arr] (\n.north |- app.south) -- (\n.north);
+  \draw[arr] (\n.south) -- (\n.south |- gfx.north);
+}
+\draw[arr] (gfx) -- (core);
+\end{tikzpicture}
+\caption{Module overview. Arrows mean ``uses''.}\label{fig:modules}
+\end{figure}
+
+\subsection{Frame loop}
+Each frame runs the same sequence (\Cref{fig:loop}). All movement uses the measured frame time
+$\Delta t$, so every animation has the same speed at 30 and at 60 frames per second.
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.35cm,b/.style={box,text width=2.35cm,minimum height=1.25cm,font=\footnotesize}]
+\node[b,fill=yellow!15] (in) {input\\keys, mouse};
+\node[b,fill=yellow!15,right=of in] (up) {update\\player, clock, machines, visitors};
+\node[b,fill=green!12,right=of up] (sh) {shadow pass\\depth from the sun};
+\node[b,fill=cyan!12,right=of sh] (op) {depth pre-pass + lighting pass};
+\node[b,fill=purple!10,right=of op] (tr) {glass, text, HUD};
+\node[b,fill=gray!12,right=of tr] (cap) {swap buffers, frame cap};
+\draw[arr] (in)--(up); \draw[arr] (up)--(sh); \draw[arr] (sh)--(op); \draw[arr] (op)--(tr); \draw[arr] (tr)--(cap);
+\draw[arr] (cap.south) -- ++(0,-0.45) -| (in.south);
+\end{tikzpicture}
+\caption{One frame of the program.}\label{fig:loop}
+\end{figure}
+
+\subsection{Scene layout}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=0.26cm,y=-0.26cm,lab/.style={font=\scriptsize,align=center}]
+\fill[green!22!white] (-31,-9) rectangle (31,28);
+\fill[gray!55] (-24,8.5) rectangle (24,23.5);
+\fill[gray!55] (-31,12.3) rectangle (-24,19.7); \fill[gray!55] (24,12.3) rectangle (31,19.7);
+\fill[gray!22] (-14,5) rectangle (17,8.5);
+\draw[thick,fill=yellow!20] (-12,-5) rectangle (-7,5);
+\draw[thick,fill=orange!15] (-7,-5) rectangle (7,5);
+\draw[thick,fill=cyan!12] (7,-5) rectangle (15,5);
+\node[lab] at (-9.5,0) {ATM\\room};
+\node[lab] at (0,0) {MAIN LOUNGE\\TV, sofas, coffee,\\3 vending machines};
+\node[lab] at (11,0) {LIBRARY\\+ aquarium};
+\draw[line width=2pt,white] (-1.2,5) -- (1.2,5);
+\draw[line width=2pt,white] (-7,-3.4) -- (-7,-1.8);
+\draw[line width=2pt,white] (7,-1.2) -- (7,0.4);
+\node[lab,anchor=south] at (0,5.1) {entrance};
+\foreach \i in {-15,-12,-9,-6,-3,3,6,9,12,15} {\draw[white] (\i-1.5,8.9)--(\i-1.5,13.5); \draw[white] (\i-1.5,18.5)--(\i-1.5,23.1);}
+\draw[white,dashed] (-31,16) -- (31,16);
+\node[lab] at (1.5,6.8) {sidewalk};
+\node[lab] at (-12,14.6) {parking lot};
+\node[lab] at (-27.5,14.4) {road};
+\node[lab] at (27.5,14.4) {road};
+\draw[arr] (8,17.3) -- (2,17.3); \node[lab,anchor=west] at (8.3,17.3) {one-way aisle};
+\node[lab] at (0,26) {jungle all around};
+\draw[arr] (-35,-9) -- (-35,-5) node[below,font=\scriptsize]{$+z$};
+\draw[arr] (-35,-9) -- (-32.5,-9) node[above,font=\scriptsize]{$+x$};
+\end{tikzpicture}
+\caption{Top view of the layout (1 grid unit = 1 m). The building faces $+z$, towards the parking lot.}\label{fig:layout}
+\end{figure}

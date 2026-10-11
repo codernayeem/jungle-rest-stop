@@ -1,0 +1,19 @@
+{\scriptsize\setlength{\tabcolsep}{3pt}
+\begin{longtable}{@{}P{2.6cm} P{1.65cm} r P{2.85cm} P{3.3cm} P{2.05cm} P{1.75cm}@{}}
+\caption{Security camera: every part with its basic shape and its transformation $M = T\,R\,S$ (object space, metres and degrees; $\pm$ = mirrored pair, $a\ldots b$ = range over the copies)}\\
+\toprule
+Part & Shape & No. & Scale $S=(s_x,s_y,s_z)$ & Translation $T=(t_x,t_y,t_z)$ & Rotation $R=(\theta_x,\theta_y,\theta_z)$ & Colour / texture \\
+\midrule
+\endfirsthead
+\toprule
+Part & Shape & No. & Scale $S=(s_x,s_y,s_z)$ & Translation $T=(t_x,t_y,t_z)$ & Rotation $R=(\theta_x,\theta_y,\theta_z)$ & Colour / texture \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Wall mount & cube & 1 & (.1, .12, .06) & (0, 0, .03) & -- & \sw{0.90,0.90,0.90} \\
+Arm & cube & 1 & (.04, .04, .2) & (0, -.05, .14) & (20, 0, 0) & \sw{0.90,0.90,0.90} \\
+Camera body & cube & 1 & (.12, .1, .24) & (0, -.1, .24) & (25, 12, 0) & \sw{0.95,0.95,0.95} \\
+Lens & cylinder & 1 & (.06, .02, .06) & (.023, -.15, .35) & (65, -168, 180) & \sw{0.03,0.03,0.04} \\
+Recording LED & sphere & 1 & (.015, .015, .015) & (.064, -.12, .35) & (25, 12, 0) & \sw{1.00,0.10,0.10} glow \\
+\end{longtable}}

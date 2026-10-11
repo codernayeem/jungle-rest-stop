@@ -22,7 +22,6 @@ void LightManager::collect(FrameInfo& f, const Vec3& cam) {
         if (!isOn(l.group)) return;
         float d = (l.pos - cam).length();
         float score = d - l.range * 0.6f;   // big lights win a little
-        if (d > l.range + 45.0f) return;    // too far away to matter (fog)
         // skip lights whose area of effect is completely outside the view
         Vec3 r(l.range);
         if (!fr.boxVisible(l.pos - r, l.pos + r)) return;

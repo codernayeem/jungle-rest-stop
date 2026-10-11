@@ -28,9 +28,11 @@ void Hud::draw(TextRenderer& t, int W, int H, const HudData& d) {
     // ---------------- status panel (top-left) ----------------
     float px = 12, py = 12, pw = 330 * s;
     int lines = 6;
+    if (d.compact) lines = -1;   // no status panel: the ATM steps move up
+    char buf[160];
+    if (!d.compact) {
     t.rect(px, py, pw, lh * lines + 16, PANEL);
     float y = py + 8;
-    char buf[160];
     t.text(px + 10, y, fs * 1.1f, "JUNGLE REST STOP", GOLD); y += lh * 1.1f;
     std::snprintf(buf, sizeof(buf), "%s  |  %s", d.clock.c_str(), d.phase.c_str());
     t.text(px + 10, y, fs, buf, WHITE); y += lh;
@@ -42,6 +44,7 @@ void Hud::draw(TextRenderer& t, int W, int H, const HudData& d) {
     t.text(px + 10, y, fs * 0.9f, buf, DIM); y += lh;
     std::snprintf(buf, sizeof(buf), "Visitors %d  parked %d", d.visitors, d.parked);
     t.text(px + 10, y, fs * 0.9f, buf, DIM);
+    }
 
     // ---------------- wallet + items (top-right) ----------------
     float rw = 250 * s, rx = W - rw - 12, ry = 12;
@@ -59,7 +62,7 @@ void Hud::draw(TextRenderer& t, int W, int H, const HudData& d) {
 
     // ---------------- buttons (bottom-right, clickable when cursor is free) ----------------
     float bw = 190 * s, bh = 30 * s, bx = W - bw - 12, by = H - 12 - bh;
-    for (int i = (int)buttons.size() - 1; i >= 0; --i) {
+    for (int i = (int)buttons.size() - 1; i >= 0 && !d.compact; --i) {
         auto& b = buttons[i];
         b.x = bx; b.y = by; b.w = bw; b.h = bh;
         t.rect(bx, by, bw, bh, b.active ? Vec4(0.10f, 0.45f, 0.35f, 0.85f) : Vec4(0.15f, 0.17f, 0.22f, 0.85f));
@@ -67,7 +70,7 @@ void Hud::draw(TextRenderer& t, int W, int H, const HudData& d) {
         t.text(bx + 12, by + (bh - fs * 0.95f) * 0.5f, fs * 0.95f, b.label, WHITE);
         by -= bh + 6;
     }
-    if (!d.cursorFree) t.text(bx, by + 4, fs * 0.8f, "[Alt] free mouse to click", DIM);
+    if (!d.cursorFree && !d.compact) t.text(bx, by + 4, fs * 0.8f, "[Alt] free mouse to click", DIM);
 
     // ---------------- ATM steps (left) ----------------
     if (d.showAtmSteps) {
@@ -129,7 +132,7 @@ void Hud::draw(TextRenderer& t, int W, int H, const HudData& d) {
         float hw = 700 * s, hx = W * 0.5f - hw * 0.5f, hy = H * 0.5f - (n * lh + 20) * 0.5f;
         t.rect(hx, hy, hw, n * lh + 20, Vec4(0.02f, 0.03f, 0.05f, 0.85f));
         for (int i = 0; i < n; ++i) t.text(hx + 16, hy + 10 + i * lh, fs, help[i], i == 0 ? GOLD : WHITE);
-    } else {
+    } else if (!d.compact) {
         t.text(12, H - 12 - fs, fs * 0.85f, "H = help", DIM);
     }
     t.end2D();

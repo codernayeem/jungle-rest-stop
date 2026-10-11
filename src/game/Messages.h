@@ -23,6 +23,7 @@ public:
         while (!m_list.empty() && m_list.front().time <= 0.0f) m_list.pop_front();
     }
     const std::deque<Toast>& list() const { return m_list; }
+    void clear() { m_list.clear(); }
 private:
     std::deque<Toast> m_list;
 };

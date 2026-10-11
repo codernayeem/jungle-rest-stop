@@ -21,6 +21,7 @@ void bush(const Node& n, float s, Rng& rng);
 void fern(const Node& n, float s);
 void rock(const Node& n, float s, Rng& rng);
 void fallenLog(const Node& n, float len, Rng& rng);
+void bird(const Node& n, float flapDeg);
 
 struct JungleStats { int trees = 0, palms = 0, bamboo = 0, bushes = 0, ferns = 0, grass = 0, rocks = 0, logs = 0; };
 

@@ -378,6 +378,7 @@ void App::fillHud(HudData& d) {
     d.cursorFree = m_cursorFree;
     d.showHelp = m_showHelp;
     d.crosshair = m_player.mode != CAM_FREE;
+    d.compact = m_hudCompact;
 
     // clickable buttons
     m_hud.buttons.clear();

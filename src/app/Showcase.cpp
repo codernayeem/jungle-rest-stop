@@ -105,13 +105,17 @@ void findCoplanarFaces(const std::vector<std::pair<Mat4, Material>>& boxes, std:
 }
 
 enum StudioObject {
-    SO_VENDING, SO_ATM, SO_COFFEE, SO_TV, SO_SOFA, SO_ARMCHAIR, SO_BOOKSHELF, SO_HUMAN, SO_HUMAN_WALK, SO_HUMAN_SIT,
-    SO_SEDAN, SO_SUV, SO_HATCH, SO_TREE, SO_PALM, SO_BAMBOO, SO_BANANA, SO_STREETLAMP, SO_PENDANT, SO_AQUARIUM,
-    SO_PRODUCTS, SO_SHAPES, SO_TABLESET, SO_CLOCK, SO_UNDERGROWTH, SO_COUNT
+    SO_VENDING, SO_PRODUCTS, SO_ATM, SO_COFFEE, SO_TV, SO_AQUARIUM,
+    SO_SOFA, SO_ARMCHAIR, SO_TABLESET, SO_BOOKSHELF, SO_READING, SO_CLOCK, SO_PENDANT, SO_LAMPS, SO_PLANTS, SO_COUNTER,
+    SO_BENCH, SO_BIN, SO_SWITCH, SO_CAMERA, SO_PAINTING, SO_DOORS, SO_FIXTURES, SO_STREETLAMP,
+    SO_HUMAN_WALK, SO_HUMAN, SO_HUMAN_SIT, SO_SEDAN, SO_SUV, SO_HATCH,
+    SO_TREE, SO_PALM, SO_EMERGENT, SO_BAMBOO, SO_BANANA, SO_UNDERGROWTH, SO_BIRD, SO_SHAPES, SO_COUNT
 };
-const char* SO_NAMES[SO_COUNT] = {"vending", "atm", "coffee", "tv", "sofa", "armchair", "bookshelf", "human", "human_walk", "human_sit",
-                                  "car_red", "car_blue", "car_white", "tree", "palm", "bamboo", "banana", "streetlamp", "pendant", "aquarium",
-                                  "products", "shapes", "tableset", "clock", "undergrowth"};
+const char* SO_NAMES[SO_COUNT] = {"vending", "products", "atm", "coffee", "tv", "aquarium",
+                                  "sofa", "armchair", "tableset", "bookshelf", "reading", "clock", "pendant", "lamps", "plants", "counter",
+                                  "bench", "bin", "switch", "camera", "painting", "doors", "fixtures", "streetlamp",
+                                  "human_walk", "human", "human_sit", "car_red", "car_blue", "car_white",
+                                  "tree", "palm", "emergent", "bamboo", "banana", "undergrowth", "bird", "shapes"};
 
 // machines used only for studio renders (kept here so the text pass can reach them)
 VendingMachine g_sVend;
@@ -120,14 +124,7 @@ CoffeeMachine g_sCoffee;
 Television g_sTv;
 Aquarium g_sAqua;
 bool g_sInit = false;
-bool g_catalogMode = false;   // parts catalogue of the car: leave the driver out
-
-// Collects every part of an object (shape, matrix, material) without drawing it
-struct PartCollector : DrawSink {
-    struct P { MeshId mesh; Mat4 M; Material m; };
-    std::vector<P> parts;
-    void add(MeshId mesh, const Mat4& M, const Material& m) override { parts.push_back({mesh, M, m}); }
-};
+bool g_noDriver = false;   // exploded view / part table: car without its driver, the man standing
 
 // world-space box around one part: the 8 corners of its unit shape, transformed
 void partBounds(MeshId mesh, const Mat4& M, Vec3& lo, Vec3& hi) {
@@ -143,48 +140,89 @@ void partBounds(MeshId mesh, const Mat4& M, Vec3& lo, Vec3& hi) {
         hi = Vec3(std::max(hi.x, w.x), std::max(hi.y, w.y), std::max(hi.z, w.z));
     }
 }
-
-// Parts catalogue: identical parts (same shape, size and material) become one entry with a count
-struct CatalogEntry { MeshId mesh; Mat4 M; Material m; int count; Vec3 size; };
-std::vector<CatalogEntry> buildCatalog(const PartCollector& pc) {
-    std::vector<CatalogEntry> out;
-    auto q = [](float v, float st) { return (long)std::lround(v / st); };
-    auto qs = [](float v) { return (long)std::lround(std::log(std::max(v, 0.002f)) / std::log(1.15f)); };   // sizes within ~15% match
-    std::map<std::string, size_t> seen;
-    for (const auto& p : pc.parts) {
-        const float* m = p.M.m;
-        float d[3] = {Vec3(m[0], m[1], m[2]).length(), Vec3(m[4], m[5], m[6]).length(), Vec3(m[8], m[9], m[10]).length()};
-        float sd[3] = {d[0], d[1], d[2]};
-        std::sort(sd, sd + 3);
-        char key[256];
-        std::snprintf(key, sizeof(key), "%d|%d|%ld|%ld|%ld|%d|%d|%ld|%ld|%ld", (int)p.mesh, p.m.tex, q(p.m.color.x, 0.12f), q(p.m.color.y, 0.12f),
-                      q(p.m.color.z, 0.12f), p.m.alpha < 0.99f ? 1 : 0, p.m.emission.length() > 0.01f ? 1 : 0, qs(sd[0]), qs(sd[1]), qs(sd[2]));
-        auto it = seen.find(key);
-        if (it != seen.end()) { out[it->second].count++; continue; }
-        seen[key] = out.size();
-        out.push_back({p.mesh, p.M, p.m, 1, Vec3(d[0], d[1], d[2])});
+void listBounds(const std::vector<PartCollector::P>& parts, Vec3& lo, Vec3& hi) {
+    lo = Vec3(1e9f);
+    hi = Vec3(-1e9f);
+    for (const auto& p : parts) {
+        Vec3 a, b;
+        partBounds(p.mesh, p.M, a, b);
+        lo = Vec3(std::min(lo.x, a.x), std::min(lo.y, a.y), std::min(lo.z, a.z));
+        hi = Vec3(std::max(hi.x, b.x), std::max(hi.y, b.y), std::max(hi.z, b.z));
     }
-    // biggest parts first
-    auto vol = [](const Vec3& v) { return std::max(v.x, 0.01f) * std::max(v.y, 0.01f) * std::max(v.z, 0.01f); };
-    std::stable_sort(out.begin(), out.end(), [&](const CatalogEntry& a, const CatalogEntry& b) { return vol(a.size) > vol(b.size); });
-    return out;
 }
 
-// Part list for the report: identical parts (same shape + material) are grouped
-struct PartListSink : DrawSink {
-    struct G { MeshId mesh; Material m; int count; Vec3 size; };
-    std::vector<G> groups;
-    void add(MeshId mesh, const Mat4& M, const Material& m) override {
-        Vec3 sz(Vec3(M.m[0], M.m[1], M.m[2]).length(), Vec3(M.m[4], M.m[5], M.m[6]).length(), Vec3(M.m[8], M.m[9], M.m[10]).length());
-        for (auto& g : groups)
-            if (g.mesh == mesh && g.m.tex == m.tex && (g.m.color - m.color).length() < 0.03f && std::fabs(g.m.alpha - m.alpha) < 0.05f &&
-                (g.m.emission.length() > 0.01f) == (m.emission.length() > 0.01f)) {
-                g.count++;
-                return;
-            }
-        groups.push_back({mesh, m, 1, sz});
+// M = T * Ry * Rx * Rz * S  ->  scale (signed), translation, Euler angles in degrees
+void decompose(const Mat4& M, Vec3& S, Vec3& T, Vec3& R) {
+    const float* m = M.m;
+    Vec3 c0(m[0], m[1], m[2]), c1(m[4], m[5], m[6]), c2(m[8], m[9], m[10]);
+    S = Vec3(c0.length(), c1.length(), c2.length());
+    if (dot(cross(c0, c1), c2) < 0) S.y = -S.y;   // mirrored part
+    T = Vec3(m[12], m[13], m[14]);
+    float r12 = m[9] / std::max(std::fabs(S.z), 1e-6f), r02 = m[8] / std::max(std::fabs(S.z), 1e-6f), r22 = m[10] / std::max(std::fabs(S.z), 1e-6f);
+    float r10 = m[1] / std::max(S.x, 1e-6f), r11 = m[5] / std::max(std::fabs(S.y), 1e-6f) * (S.y < 0 ? -1.0f : 1.0f);
+    R.x = toDegrees(std::asin(clampf(-r12, -1.0f, 1.0f)));
+    R.y = toDegrees(std::atan2(r02, r22));
+    R.z = toDegrees(std::atan2(r10, r11));
+}
+
+// Two vertices that really exist in each unit mesh (used for the world-coordinate tables)
+void meshVertexPair(MeshId m, Vec3& a, Vec3& b) {
+    switch (m) {
+        case M_CYLINDER: case M_CYLINDER_LOW: a = Vec3(0.5f, -0.5f, 0); b = Vec3(0.5f, 0.5f, 0); break;   // bottom / top ring, angle 0
+        case M_TCONE: a = Vec3(0.5f, -0.5f, 0); b = Vec3(0.35f, 0.5f, 0); break;
+        case M_CONE: a = Vec3(0.5f, -0.5f, 0); b = Vec3(0, 0.5f, 0); break;                             // ring vertex / tip
+        case M_SPHERE: case M_SPHERE_LOW: a = Vec3(0, -0.5f, 0); b = Vec3(0, 0.5f, 0); break;            // the two poles
+        case M_HEMISPHERE: a = Vec3(0.5f, 0, 0); b = Vec3(0, 0.5f, 0); break;                            // rim / pole
+        case M_TORUS: a = Vec3(0.5f, 0, 0); b = Vec3(0.3f, 0, 0); break;                                 // outer / inner edge
+        case M_WEDGE: a = Vec3(-0.5f, -0.5f, 0.5f); b = Vec3(0.5f, 0.5f, -0.5f); break;                  // w0 / w5
+        case M_FRUSTUM_BOX: a = Vec3(-0.5f, -0.5f, -0.5f); b = Vec3(0.35f, 0.5f, 0.3f); break;           // bottom / top corner
+        case M_QUAD: case M_LEAVES: a = Vec3(-0.5f, -0.5f, 0); b = Vec3(0.5f, 0.5f, 0); break;
+        case M_CROSS: a = Vec3(-0.5f, 0, 0); b = Vec3(0.5f, 1, 0); break;
+        default: a = Vec3(-0.5f); b = Vec3(0.5f); break;                                                 // cube: v0 / v6
     }
-};
+}
+
+// Exploded view. A part name may start with a region ("Head/Nose"). Regions move away
+// from the object centre, groups away from their region centre, and the parts of one
+// group a little apart from each other (left and right legs, the 4 feet ...).
+// Offsets are measured relative to the object's size on each axis, so a thin object
+// (deep only 0.8 m but 2 m tall) still opens up along its thin side.
+std::string regionOf(const std::string& tag) {
+    size_t k = tag.find('/');
+    return k == std::string::npos ? tag : tag.substr(0, k);
+}
+std::vector<PartCollector::P> explode(const std::vector<PartCollector::P>& parts, float k1, float k2, float kr = 1.4f) {
+    Vec3 lo, hi;
+    listBounds(parts, lo, hi);
+    Vec3 C = (lo + hi) * 0.5f, half = (hi - lo) * 0.5f;
+    float hm = std::max(half.x, std::max(half.y, half.z));
+    Vec3 hs(std::max(half.x, 0.12f * hm), std::max(half.y, 0.12f * hm), std::max(half.z, 0.12f * hm));
+    auto grow = [](std::map<std::string, std::pair<Vec3, Vec3>>& m, const std::string& key, const Vec3& a, const Vec3& b) {
+        auto it = m.find(key);
+        if (it == m.end()) { m[key] = {a, b}; return; }
+        it->second.first = Vec3(std::min(it->second.first.x, a.x), std::min(it->second.first.y, a.y), std::min(it->second.first.z, a.z));
+        it->second.second = Vec3(std::max(it->second.second.x, b.x), std::max(it->second.second.y, b.y), std::max(it->second.second.z, b.z));
+    };
+    std::map<std::string, std::pair<Vec3, Vec3>> gb, rb;
+    for (const auto& p : parts) {
+        Vec3 a, b;
+        partBounds(p.mesh, p.M, a, b);
+        grow(gb, p.tag, a, b);
+        grow(rb, regionOf(p.tag), a, b);
+    }
+    std::vector<PartCollector::P> out = parts;
+    for (auto& p : out) {
+        Vec3 a, b;
+        partBounds(p.mesh, p.M, a, b);
+        Vec3 pc = (a + b) * 0.5f;
+        Vec3 gc = (gb[p.tag].first + gb[p.tag].second) * 0.5f;
+        Vec3 rc = (rb[regionOf(p.tag)].first + rb[regionOf(p.tag)].second) * 0.5f;
+        Vec3 n(clampf((rc - C).x / hs.x, -1.2f, 1.2f), clampf((rc - C).y / hs.y, -1.2f, 1.2f), clampf((rc - C).z / hs.z, -1.2f, 1.2f));
+        Vec3 off = n * (hm * k1 * 0.75f) + (gc - rc) * kr + (pc - gc) * k2;
+        p.M = translate(Mat4(), off) * p.M;
+    }
+    return out;
+}
 
 struct StudioCam { Vec3 pos, target; float fov; };
 StudioCam studioCam(int o) {
@@ -197,19 +235,32 @@ StudioCam studioCam(int o) {
         case SO_ARMCHAIR: return {Vec3(1.1f, 1.1f, 1.7f), Vec3(0, 0.4f, 0), 40};
         case SO_BOOKSHELF: return {Vec3(1.2f, 1.5f, 2.8f), Vec3(0, 1.1f, 0), 40};
         case SO_HUMAN: case SO_HUMAN_WALK: case SO_HUMAN_SIT: return {Vec3(1.3f, 1.3f, 2.6f), Vec3(0, 0.85f, 0), 40};
-        case SO_SEDAN: case SO_SUV: case SO_HATCH: return {Vec3(-4.2f, 2.2f, 4.8f), Vec3(0, 0.7f, 0), 40};
+        case SO_SEDAN: case SO_SUV: case SO_HATCH: return {Vec3(-4.2f, 3.0f, 4.6f), Vec3(0, 0.7f, 0), 40};
         case SO_TREE: return {Vec3(9.0f, 6.5f, 14.0f), Vec3(0, 5.5f, 0), 45};
         case SO_PALM: return {Vec3(8.0f, 6.0f, 13.0f), Vec3(0, 5.6f, 0), 50};
+        case SO_EMERGENT: return {Vec3(14.0f, 11.0f, 22.0f), Vec3(0, 9.0f, 0), 50};
         case SO_BAMBOO: return {Vec3(6.0f, 4.0f, 9.0f), Vec3(0, 3.8f, 0), 45};
         case SO_BANANA: return {Vec3(2.6f, 2.0f, 4.0f), Vec3(0, 1.3f, 0), 45};
         case SO_STREETLAMP: return {Vec3(5.0f, 3.6f, 8.0f), Vec3(0, 3.0f, 0.6f), 45};
-        case SO_PENDANT: return {Vec3(0.9f, -1.3f, 1.3f), Vec3(0, -0.55f, 0), 40};
+        case SO_PENDANT: return {Vec3(0.9f, -0.6f, 1.3f), Vec3(0, -0.55f, 0), 40};
         case SO_AQUARIUM: return {Vec3(1.3f, 1.5f, 2.6f), Vec3(0, 0.85f, 0), 40};
         case SO_PRODUCTS: return {Vec3(0.0f, 0.35f, 0.75f), Vec3(0, 0.06f, 0), 40};
         case SO_SHAPES: return {Vec3(0.0f, 3.2f, 6.2f), Vec3(0, 0.3f, 0), 45};
         case SO_TABLESET: return {Vec3(1.6f, 1.6f, 2.6f), Vec3(0, 0.3f, 0), 40};
-        case SO_CLOCK: return {Vec3(0.0f, 0.0f, 0.9f), Vec3(0, 0, 0), 40};
+        case SO_CLOCK: return {Vec3(0.3f, 0.2f, 0.9f), Vec3(0, 0, 0), 40};
         case SO_UNDERGROWTH: return {Vec3(3.0f, 2.0f, 4.5f), Vec3(0, 0.5f, 0), 45};
+        case SO_READING: return {Vec3(1.6f, 1.5f, 2.4f), Vec3(0, 0.5f, 0), 40};
+        case SO_LAMPS: return {Vec3(1.4f, 1.3f, 2.6f), Vec3(0, 0.8f, 0), 40};
+        case SO_PLANTS: return {Vec3(1.5f, 1.4f, 2.8f), Vec3(0, 0.6f, 0), 40};
+        case SO_COUNTER: return {Vec3(1.6f, 1.4f, 2.6f), Vec3(0, 0.45f, 0), 40};
+        case SO_BENCH: return {Vec3(1.6f, 1.2f, 2.4f), Vec3(0, 0.4f, 0), 40};
+        case SO_BIN: return {Vec3(0.9f, 1.0f, 1.5f), Vec3(0, 0.45f, 0), 40};
+        case SO_SWITCH: return {Vec3(0.12f, 0.08f, 0.3f), Vec3(0, 0, 0), 40};
+        case SO_CAMERA: return {Vec3(0.5f, 0.15f, 0.7f), Vec3(0, -0.05f, 0.1f), 40};
+        case SO_PAINTING: return {Vec3(0.6f, 0.3f, 3.0f), Vec3(0, 0, 0), 40};
+        case SO_DOORS: return {Vec3(1.2f, 1.6f, 3.4f), Vec3(0, 1.3f, 0), 40};
+        case SO_FIXTURES: return {Vec3(0.9f, 1.2f, 3.0f), Vec3(0, 0.6f, 0), 40};
+        case SO_BIRD: return {Vec3(0.8f, 0.6f, 1.2f), Vec3(0, 0, 0), 40};
     }
     return {Vec3(2, 2, 2), Vec3(0, 0, 0), 45};
 }
@@ -219,6 +270,7 @@ StudioCam studioCam(int o) {
 void App::studioObject(DrawSink& s, int o, float time) {
     Node n(s);
     Rng rng(42);
+    partTag("");
     if (!g_sInit) {
         g_sVend.init(0, VEND_DRINKS, Vec3(0, 0, 0), 0.0f);
         g_sAtm.init(Vec3(0, 0, 0), 0.0f);
@@ -240,7 +292,7 @@ void App::studioObject(DrawSink& s, int o, float time) {
         case SO_ARMCHAIR: Furniture::armchair(n, Vec3(0.55f, 0.30f, 0.22f)); break;
         case SO_BOOKSHELF: Furniture::bookshelf(n, 1.8f, 2.3f); break;
         case SO_HUMAN: Human::draw(n, Human::look(1), Human::idle(0.0f), HELD_CUP); break;
-        case SO_HUMAN_WALK: Human::draw(n, Human::look(0), Human::walk(1.2f, 1.0f), HELD_NONE); break;
+        case SO_HUMAN_WALK: Human::draw(n, Human::look(0), g_noDriver ? Human::idle(0.0f) : Human::walk(1.2f, 1.0f), HELD_NONE); break;
         case SO_HUMAN_SIT: {
             Furniture::chair(n.at({0, 0, -0.05f}), Vec3(0.45f, 0.2f, 0.15f));
             Human::draw(n, Human::look(0), Human::sit(0.0f), HELD_PHONE);
@@ -255,14 +307,18 @@ void App::studioObject(DrawSink& s, int o, float time) {
             st.time = time;
             Car::draw(n, l, st);
             CarDims d = Car::dims();
-            if (!g_catalogMode) Human::draw(n.at(d.driverSeat), Human::look(0), Human::drive(0.0f), HELD_NONE);
+            if (!g_noDriver) Human::draw(n.at(d.driverSeat), Human::look(0), Human::drive(0.0f), HELD_NONE);
             break;
         }
         case SO_TREE: Nature::rainforestTree(n, 1.0f, rng); break;
         case SO_PALM: Nature::palmTree(n, 1.0f, rng); break;
+        case SO_EMERGENT: Nature::emergentTree(n, 1.0f, rng); break;
         case SO_BAMBOO: Nature::bambooClump(n, 0.8f, rng); break;
         case SO_BANANA: Nature::bananaPlant(n, 1.0f, rng); break;
-        case SO_STREETLAMP: Furniture::streetLamp(n, 5.8f, true); break;
+        case SO_STREETLAMP:
+            Furniture::streetLamp(n, 5.8f, true);
+            Furniture::bollard(n.at({-1.3f, 0, 0.6f}), true);
+            break;
         case SO_PENDANT: Furniture::pendantLamp(n, 0.6f, true, Vec3(0.12f, 0.12f, 0.13f)); break;
         case SO_AQUARIUM: g_sAqua.update(0.016f); g_sAqua.drawStatic(s); g_sAqua.drawDynamic(s); break;
         case SO_PRODUCTS: {
@@ -270,7 +326,11 @@ void App::studioObject(DrawSink& s, int o, float time) {
             static bool init = false;
             if (!init) { a.init(0, VEND_DRINKS, Vec3(), 0); b.init(1, VEND_SNACKS, Vec3(), 0); c.init(2, VEND_SWEETS, Vec3(), 0); init = true; }
             const Product* ps[6] = {&a.m_slots[0].p, &a.m_slots[6].p, &a.m_slots[5].p, &b.m_slots[0].p, &c.m_slots[0].p, &c.m_slots[6].p};
-            for (int i = 0; i < 6; ++i) drawProduct(n.at({-0.45f + i * 0.18f, 0, 0}), *ps[i]);
+            const char* names[6] = {"Can", "Bottle", "Juice box", "Chips bag", "Chocolate bar", "Cookie box"};
+            for (int i = 0; i < 6; ++i) {
+                partTag(names[i]);
+                drawProduct(n.at({-0.45f + i * 0.18f, 0, 0}), *ps[i]);
+            }
             break;
         }
         case SO_SHAPES: {
@@ -292,18 +352,57 @@ void App::studioObject(DrawSink& s, int o, float time) {
             break;
         }
         case SO_TABLESET:
+            partTag("Rug");
             Furniture::rug(n, 2.4f, 1.8f, Vec3(0.65f, 0.55f, 0.42f), Vec3(0.35f, 0.25f, 0.18f));
             Furniture::coffeeTable(n, 1.2f, 0.6f);
-            Furniture::pottedPlant(n.at({0.9f, 0, -0.5f}), 1.0f, 0);
             break;
         case SO_CLOCK: Furniture::wallClock(n, 10.1f); break;
         case SO_UNDERGROWTH:
+            partTag("Bush");
             Nature::bush(n.at({-1.0f, 0, 0}), 1.0f, rng);
+            partTag("Fern");
             Nature::fern(n.at({0.6f, 0, 0.4f}), 1.3f);
+            partTag("Rock");
             Nature::rock(n.at({1.2f, 0, -0.8f}), 0.8f, rng);
             Nature::fallenLog(n.at({0, 0, -1.4f}), 3.0f, rng);
             break;
+        case SO_READING:
+            Furniture::readingTable(n);
+            partTag("Chair");
+            Furniture::chair(n.at({0, 0, 0.75f}, {0, 180, 0}), Vec3(0.45f, 0.2f, 0.15f));
+            break;
+        case SO_LAMPS:
+            Furniture::sideTable(n.at({-0.55f, 0, 0}));
+            Furniture::tableLamp(n.at({-0.55f, 0.57f, 0}), true);
+            Furniture::floorLamp(n.at({0.55f, 0, 0}), true);
+            break;
+        case SO_PLANTS:
+            for (int v = 0; v < 3; ++v) Furniture::pottedPlant(n.at({-0.75f + v * 0.75f, 0, 0}), 1.0f, v);
+            break;
+        case SO_COUNTER:
+            Furniture::counter(n, 1.8f, 0.6f, 0.92f);
+            Furniture::wallCabinet(n.at({0, 1.85f, -0.13f}), 1.8f);
+            break;
+        case SO_BENCH: Furniture::bench(n, 1.8f); break;
+        case SO_BIN: Furniture::trashBin(n, Vec3(0.2f, 0.45f, 0.25f)); break;
+        case SO_SWITCH: Furniture::lightSwitch(n, true, false); break;
+        case SO_CAMERA: Furniture::securityCamera(n, 1.0f); break;
+        case SO_PAINTING:
+            for (int v = 0; v < 3; ++v) Furniture::painting(n.at({-1.1f + v * 1.1f, 0, 0}), 0.9f, 0.7f, v);
+            break;
+        case SO_DOORS:
+            Furniture::slidingDoorLeaf(n.at({-0.6f, 0, 0}), -1);
+            Furniture::slidingDoorLeaf(n.at({0.6f, 0, 0}), 1);
+            break;
+        case SO_FIXTURES:
+            Furniture::acUnit(n.at({-1.6f, 0, 0}));
+            Furniture::spotFixture(n.at({0.0f, 0.9f, 0}).rotX(-90.0f), true);
+            Furniture::tubeLight(n.at({1.3f, 0.9f, 0}).rotX(-90.0f), 1.0f, true);
+            Furniture::smokeDetector(n.at({0.0f, 0.45f, 0}).rotX(-90.0f));
+            break;
+        case SO_BIRD: Nature::bird(n, 25.0f); break;
     }
+    partTag("");
 }
 
 int App::studioPartCount(int o) {
@@ -318,13 +417,8 @@ void App::renderStudio(int w, int h, const Vec3& camPos0, const Vec3& target0, f
     if (white >= 0.0f) {
         PartCollector pc;
         studioObject(pc, object, time);
-        Vec3 lo(1e9f), hi(-1e9f);
-        for (const auto& p : pc.parts) {
-            Vec3 a, b;
-            partBounds(p.mesh, p.M, a, b);
-            lo = Vec3(std::min(lo.x, a.x), std::min(lo.y, a.y), std::min(lo.z, a.z));
-            hi = Vec3(std::max(hi.x, b.x), std::max(hi.y, b.y), std::max(hi.z, b.z));
-        }
+        Vec3 lo, hi;
+        listBounds(pc.parts, lo, hi);
         target = (lo + hi) * 0.5f;
         float r = (hi - lo).length() * 0.5f;
         camPos = target + normalize(camPos0 - target0) * (r / std::sin(toRadians(fov) * 0.5f));
@@ -374,69 +468,47 @@ void App::renderStudio(int w, int h, const Vec3& camPos0, const Vec3& target0, f
     m_renderer.settings.shadowRadius = rad;
 }
 
-// Renders one part alone (same viewing direction as the studio), zoomed to fill
-// the middle square of the frame, and saves that square as a small PNG.
-void App::renderPartTile(int w, int h, const Vec3& viewDir, int mesh, const Mat4& M0, const Material& mat, const std::string& path) {
-    Mat4 M = M0;
-    M.m[12] = M.m[13] = M.m[14] = 0.0f;   // keep the part's rotation and size, drop its position
+// Renders a list of parts on a white background, camera fitted to them (exploded views,
+// single basic shapes). wire = also draw the edges of every triangle.
+Mat4 App::renderPartList(int w, int h, const Vec3& viewDir, const std::vector<PartCollector::P>& parts, bool wire, float fov) {
     Vec3 lo, hi;
-    partBounds((MeshId)mesh, M, lo, hi);
-    Vec3 c = (lo + hi) * 0.5f;
-    float r = std::max(0.02f, (hi - lo).length() * 0.5f);
-    if (mesh == M_LEAVES || mesh == M_CROSS) r *= 0.6f;   // most of a leaf card is see-through: zoom in
-    const float fov = 30.0f;
-    Vec3 dir = viewDir;
-    if (mesh == M_QUAD) {   // a flat card: look at its face, not its edge
-        Vec3 nrm = normalize(Vec3(M.m[8], M.m[9], M.m[10]));
-        if (dot(nrm, viewDir) < 0) nrm = nrm * -1.0f;
-        dir = normalize(nrm * 0.85f + viewDir * 0.15f);
-    }
-    Vec3 cam = c + dir * (r / std::sin(toRadians(fov) * 0.5f) * 1.08f);
+    listBounds(parts, lo, hi);
+    Vec3 target = (lo + hi) * 0.5f;
+    float r = std::max(0.01f, (hi - lo).length() * 0.5f);
+    Vec3 camPos = target + normalize(viewDir) * (r / std::sin(toRadians(fov) * 0.5f));
     FrameInfo f;
     f.proj = perspective(toRadians(fov), (float)w / h, r * 0.05f, r * 20.0f);
-    f.view = lookAt(cam, c, std::fabs(dir.y) > 0.98f ? Vec3(0, 0, -1) : Vec3(0, 1, 0));
-    f.camPos = cam;
+    f.view = lookAt(camPos, target, std::fabs(normalize(viewDir).y) > 0.98f ? Vec3(0, 0, -1) : Vec3(0, 1, 0));
+    f.camPos = camPos;
     f.time = 1.0f;
     Environment& e = f.env;
     e.lightDir = normalize(Vec3(0.55f, 0.85f, 0.65f));
     e.lightColor = Vec3(1.05f, 1.0f, 0.95f);
-    e.skyAmbient = Vec3(0.50f, 0.52f, 0.56f);
-    e.groundAmbient = Vec3(0.30f, 0.29f, 0.27f);
+    e.skyAmbient = Vec3(0.47f, 0.49f, 0.54f);
+    e.groundAmbient = Vec3(0.28f, 0.27f, 0.25f);
     e.fogDensity = 0.0f;
     e.exposure = 1.25f;
     e.castShadows = false;
     f.drawStatic = false;
     f.drawSky = false;
     f.clearColor = Vec3(1.0f);
-    f.shadowFocus = c;
+    f.shadowFocus = target;
     f.indoorBox = Vec4(1e6f, 1e6f, 1e6f + 1, 1e6f + 1);
     f.farDist = 200.0f;
     bool fog = m_renderer.settings.fog;
     m_renderer.settings.fog = false;
-    Material m = mat;
-    m.lod = 0;
-    if (m.alpha < 0.99f) m.alpha = std::max(m.alpha, 0.55f);   // glass: a bit stronger, so it can be seen on white
-    m_renderer.dynamicSink().add((MeshId)mesh, M, m);
+    for (const auto& p : parts) {
+        Material m = p.m;
+        m.lod = 0;
+        if (m.alpha < 0.99f) m.alpha = std::max(m.alpha, 0.45f);   // glass: a bit stronger, so it can be seen on white
+        m_renderer.dynamicSink().add(p.mesh, p.M, m);
+    }
     m_renderer.beginFrame(f, w, h);
+    if (wire) m_renderer.drawWireOverlay(Vec3(0.05f, 0.07f, 0.12f));
     m_renderer.drawTransparent();
     m_renderer.endFrame();
     m_renderer.settings.fog = fog;
-    glFinish();
-    // read the middle h x h square and shrink it 3 times (box filter)
-    std::vector<uint8_t> px((size_t)w * h * 3);
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, px.data());
-    const int k = 3, n = h / k, x0 = (w - h) / 2;
-    std::vector<uint8_t> out((size_t)n * n * 3);
-    for (int y = 0; y < n; ++y)
-        for (int x = 0; x < n; ++x)
-            for (int ch = 0; ch < 3; ++ch) {
-                int sum = 0;
-                for (int dy = 0; dy < k; ++dy)
-                    for (int dx = 0; dx < k; ++dx) sum += px[((size_t)(h - 1 - (y * k + dy)) * w + x0 + x * k + dx) * 3 + ch];
-                out[((size_t)y * n + x) * 3 + ch] = (uint8_t)(sum / (k * k));
-            }
-    writePNG(path, n, n, out.data(), 3);
+    return f.proj * f.view;
 }
 
 // =============================================================================
@@ -446,6 +518,7 @@ void App::runShots(const std::string& dir) {
     glfwGetFramebufferSize(m_win, &w, &h);
     m_hudVisible = true;
     m_showHelp = false;
+    m_fps = 60;   // screenshots are rendered offline; the HUD shows the target frame rate
     Messages::get().push("", 0.0f);
     std::ofstream log(dir + "/shots_log.txt");
 
@@ -521,18 +594,6 @@ void App::runShots(const std::string& dir) {
         };
         m_day.hour = 11.0f;
         if (std::string(std::getenv("JRS_DEBUG")) == "tour") { tourShots(); return; }
-        if (std::string(std::getenv("JRS_DEBUG")) == "gloss") {
-            m_visitors.prewarm(120.0f, m_col);
-            hour(10.5f);
-            cam(Vec3(4.5f, 1.7f, 9.6f), Vec3(2.9f, 0.6f, 5.6f), 60); frame(false, 3); save("g_bin");
-            cam(Vec3(-1.0f, 2.0f, 10.5f), Vec3(2.45f, 1.5f, 7.35f), 55); frame(false, 3); save("g_posts");
-            freeCam(Vec3(-4.0f, 11.0f, 24.5f), Vec3(1.5f, 1.2f, 1.0f), 64); frame(false, 3); save("g_ext");
-            cam(Vec3(10.2f, 1.75f, 9.4f), Vec3(12.2f, 1.25f, 6.9f), 50); frame(false, 3); save("g_car_red");
-            cam(Vec3(-9.0f, 1.9f, 16.0f), Vec3(-9.0f, 0.6f, 21.0f), 62); frame(false, 3); save("g_car_blue");
-            hour(21.0f);
-            cam(Vec3(4.5f, 1.7f, 9.6f), Vec3(2.9f, 0.6f, 5.6f), 60); frame(false, 3); save("g_bin_night");
-            return;
-        }
         if (std::string(std::getenv("JRS_DEBUG")) == "wall") {
             hour(11.0f);
             cam(Vec3(-4.2f, 1.6f, 0.5f), Vec3(-4.2f, 1.6f, 5.0f), 75); frame(false, 3); save("w_front_left");
@@ -670,15 +731,6 @@ void App::runShots(const std::string& dir) {
             for (int m = 0; m < M_COUNT; ++m) csv << "," << c.perMesh[m];
             csv << "\n";
         }
-        std::ofstream pl(dir + "/partlist.csv");
-        pl << "object,shape,texture,r,g,b,alpha,glow,count,sx,sy,sz" << "\n";
-        for (int o = 0; o < SO_COUNT; ++o) {
-            PartListSink ps;
-            studioObject(ps, o, 0.0f);
-            for (auto& g : ps.groups)
-                pl << SO_NAMES[o] << "," << meshName(g.mesh) << "," << g.m.tex << "," << g.m.color.x << "," << g.m.color.y << "," << g.m.color.z << ","
-                   << g.m.alpha << "," << (g.m.emission.length() > 0.01f ? 1 : 0) << "," << g.count << "," << g.size.x << "," << g.size.y << "," << g.size.z << "\n";
-        }
         std::ofstream st(dir + "/stats.txt");
         st << "static_instances " << m_renderer.staticInstanceCount() << "\nchunks " << m_renderer.statChunksTotal
            << "\nstatic_lights " << LightManager::get().staticCount() << "\ncolliders " << m_col.staticCount()
@@ -703,41 +755,123 @@ void App::runShots(const std::string& dir) {
         writePNG(name, TextureArray::SIZE, TextureArray::SIZE, rgb.data(), 3);
     }
 
-    // ---- studio renders + build stages ----
-    for (int o = 0; o < SO_COUNT; ++o) {
-        StudioCam c = studioCam(o);
-        int total = studioPartCount(o);
-        renderStudio(w, h, c.pos, c.target, c.fov, 1 << 30, o, 1.0f);
-        save(std::string("obj_") + SO_NAMES[o]);
-        if (o != SO_SHAPES && o != SO_SUV && o != SO_HATCH && o != SO_HUMAN_SIT) {
-            renderStudio(w, h, c.pos, c.target, c.fov, 1 << 30, o, 1.0f, 0.0f);
-            save(std::string("white_") + SO_NAMES[o]);
-            // parts catalogue: every different part alone in its own tile
-            PartCollector pc;
-            g_catalogMode = true;
-            studioObject(pc, o, 1.0f);
-            g_catalogMode = false;
-            std::vector<CatalogEntry> cat = buildCatalog(pc);
-            Vec3 viewDir = normalize(c.pos - c.target);
-            std::ofstream cf(dir + "/catalog_" + SO_NAMES[o] + ".csv");
-            cf << "idx,shape,count,sx,sy,sz,parts_total,entries_total\n";
-            const int MAXT = 36;
-            for (int i = 0; i < (int)cat.size() && i < MAXT; ++i) {
-                char nm[256];
-                std::snprintf(nm, sizeof(nm), "%s/cat_%s_%02d.png", dir.c_str(), SO_NAMES[o], i);
-                renderPartTile(w, h, viewDir, cat[i].mesh, cat[i].M, cat[i].m, nm);
-                cf << i << "," << meshName(cat[i].mesh) << "," << cat[i].count << "," << cat[i].size.x << "," << cat[i].size.y << ","
-                   << cat[i].size.z << "," << pc.parts.size() << "," << cat.size() << "\n";
-            }
-        }
-        if (o == SO_VENDING || o == SO_HUMAN || o == SO_SEDAN || o == SO_TREE || o == SO_PALM || o == SO_SOFA || o == SO_ATM || o == SO_STREETLAMP) {
-            const float stages[3] = {0.12f, 0.35f, 0.65f};
-            for (int k = 0; k < 3; ++k) {
-                renderStudio(w, h, c.pos, c.target, c.fov, std::max(1, (int)(total * stages[k])), o, 1.0f);
-                save(std::string("stage_") + SO_NAMES[o] + "_" + std::to_string(k + 1));
-            }
+    // ---- every basic shape alone, with the edges of its triangles ----
+    {
+        const MeshId ids[] = {M_CUBE, M_CYLINDER, M_CYLINDER_LOW, M_SPHERE, M_SPHERE_LOW, M_CONE, M_TCONE, M_TORUS,
+                              M_HEMISPHERE, M_WEDGE, M_FRUSTUM_BOX, M_QUAD, M_CROSS, M_LEAVES, M_COIL};
+        std::ofstream sf(dir + "/shapes.csv");
+        sf << "id,name,vertices,triangles\n";
+        for (MeshId id : ids) {
+            std::vector<PartCollector::P> one;
+            one.push_back({id, Mat4(), Material(Vec3(0.55f, 0.72f, 0.92f), 0.3f, 32.0f), ""});
+            renderPartList(w, h, Vec3(0.75f, 0.55f, 1.0f), one, true, 30.0f);
+            save("shape_" + std::to_string((int)id));
+            sf << (int)id << "," << meshName(id) << "," << m_renderer.mesh(id).vertexCount << "," << m_renderer.mesh(id).indexCount / 3 << "\n";
         }
     }
+
+    // ---- objects: whole view, exploded view with part names, part list ----
+    for (int o = 0; o < SO_COUNT; ++o) {
+        StudioCam c = studioCam(o);
+        std::string name = SO_NAMES[o];
+        bool posed = o == SO_HUMAN || o == SO_HUMAN_WALK || o == SO_HUMAN_SIT || o == SO_SEDAN || o == SO_SUV || o == SO_HATCH || o == SO_SHAPES;
+        if (posed) {
+            renderStudio(w, h, c.pos, c.target, c.fov, 1 << 30, o, 1.0f);
+            save("obj_" + name);
+        }
+        if (o == SO_SHAPES || o == SO_SUV || o == SO_HATCH || o == SO_HUMAN_SIT) continue;
+        g_noDriver = o == SO_HUMAN_WALK;
+        renderStudio(w, h, c.pos, c.target, c.fov, 1 << 30, o, 1.0f, 0.0f);
+        save("white_" + name);
+        PartCollector pc;
+        g_noDriver = true;
+        studioObject(pc, o, 1.0f);
+        g_noDriver = false;
+        std::ofstream pf(dir + "/parts_" + name + ".csv");
+        pf << "tag,shape,sx,sy,sz,tx,ty,tz,rx,ry,rz,r,g,b,alpha,glow,tex\n";
+        for (const auto& p : pc.parts) {
+            Vec3 S, T, R;
+            decompose(p.M, S, T, R);
+            pf << "\"" << p.tag << "\"," << meshName(p.mesh) << "," << S.x << "," << S.y << "," << S.z << "," << T.x << "," << T.y << "," << T.z << ","
+               << R.x << "," << R.y << "," << R.z << "," << p.m.color.x << "," << p.m.color.y << "," << p.m.color.z << "," << p.m.alpha << ","
+               << (p.m.emission.length() > 0.01f ? 1 : 0) << "," << p.m.tex << "\n";
+        }
+        // world coordinates: the object as it is placed in the scene, M_world = M_place * M_part
+        {
+            bool placed = true;
+            Mat4 place;
+            std::string where;
+            using namespace Layout;
+            switch (o) {
+                case SO_VENDING: place = translate(Mat4(), VENDING_POS[0]); where = "T(2.4, 0, -4.5)"; break;
+                case SO_ATM: place = translate(Mat4(), ATM_POS); where = "T(-9.5, 0, -4.55)"; break;
+                case SO_COFFEE: place = translate(Mat4(), COFFEE_POS); where = "T(-5, 0.92, -4.55)"; break;
+                case SO_TV: place = translate(Mat4(), TV_POS - Vec3(0, 1.0f, 0)); where = "T(0, 1.75, -4.86)"; break;
+                case SO_AQUARIUM: place = rotateYXZ(translate(Mat4(), AQUARIUM_POS), {0, 180, 0}); where = "T(9.8, 0, 4.45) R_y(180)"; break;
+                case SO_SOFA: place = rotateYXZ(translate(Mat4(), Vec3(0, 0, -0.6f)), {0, 180, 0}); where = "T(0, 0, -0.6) R_y(180)"; break;
+                case SO_BOOKSHELF: place = translate(Mat4(), Vec3(9.0f, 0, Z_BACK + 0.31f)); where = "T(9, 0, -4.69)"; break;
+                case SO_CLOCK: place = translate(Mat4(), Vec3(0, 3.0f, Z_BACK + 0.13f)); where = "T(0, 3, -4.87)"; break;
+                case SO_DOORS: place = translate(Mat4(), Vec3(0, 0, Z_FRONT + 0.18f)); where = "T(0, 0, 5.18)"; break;
+                case SO_STREETLAMP: place = translate(Mat4(), Vec3(-18.0f, 0, 8.25f)); where = "T(-18, 0, 8.25)"; break;
+                case SO_SEDAN: place = translate(Mat4(), Vec3(-3.0f, 0, 11.2f)); where = "T(-3, 0, 11.2)"; break;
+                case SO_HUMAN_WALK: place = rotateYXZ(translate(Mat4(), Vec3(0, 0, 6.0f)), {0, 180, 0}); where = "T(0, 0, 6) R_y(180)"; break;
+                default: placed = false;
+            }
+            if (placed) {
+                std::ofstream wf(dir + "/world_" + name + ".csv");
+                wf << "# " << where << "\n";
+                wf << "tag,shape,cx,cy,cz,ax,ay,az,bx,by,bz\n";
+                for (const auto& p : pc.parts) {
+                    if (o == SO_STREETLAMP && (p.tag == "Post" || p.tag == "Light ring" || p.tag == "Cap")) continue;   // the bollard
+                    Mat4 M = place * p.M;
+                    Vec3 la, lb;
+                    meshVertexPair(p.mesh, la, lb);
+                    Vec3 c = M.transformPoint(Vec3(0, 0, 0)), a = M.transformPoint(la), b = M.transformPoint(lb);
+                    wf << "\"" << p.tag << "\"," << meshName(p.mesh) << "," << c.x << "," << c.y << "," << c.z << "," << a.x << "," << a.y << "," << a.z << ","
+                       << b.x << "," << b.y << "," << b.z << "\n";
+                }
+            }
+        }
+        float k1 = 0.9f, k2 = 0.6f;
+        if (o == SO_HUMAN || o == SO_HUMAN_WALK) { k1 = 0.45f; k2 = 0.9f; }
+        if (o == SO_SEDAN) { k1 = 0.6f; k2 = 0.7f; }
+        if (o == SO_TREE || o == SO_PALM || o == SO_EMERGENT) { k1 = 0.5f; k2 = 0.35f; }
+        if (o == SO_BAMBOO) { k1 = 0.4f; k2 = 0.9f; }
+        if (o == SO_TV || o == SO_CLOCK) k1 = 2.0f;
+        if (o == SO_STREETLAMP) k1 = 0.35f;
+        if (o == SO_PENDANT) k1 = 0.5f;
+        std::vector<PartCollector::P> ex = explode(pc.parts, k1, k2);
+        Vec3 exDir = normalize(c.pos - c.target);
+        // flat objects seen from the front would hide their layers: look at them from the side
+        if (o == SO_TV || o == SO_CLOCK || o == SO_PAINTING || o == SO_SWITCH || o == SO_DOORS) exDir = normalize(Vec3(1.6f, 0.7f, 1.3f));
+        Mat4 vp = renderPartList(w, h, exDir, ex, false, 40.0f);
+        save("explode_" + name);
+        // label anchor of a group = centre of its biggest part (in pixels of the saved image)
+        std::map<std::string, std::pair<float, Vec3>> best;
+        std::map<std::string, float> groupVol;
+        std::vector<std::string> order;
+        for (const auto& p : ex) {
+            Vec3 a, b;
+            partBounds(p.mesh, p.M, a, b);
+            Vec3 d = b - a;
+            float vol = std::max(d.x, 0.005f) * std::max(d.y, 0.005f) * std::max(d.z, 0.005f);
+            if (!best.count(p.tag)) { best[p.tag] = {-1.0f, Vec3()}; order.push_back(p.tag); }
+            groupVol[p.tag] += vol;
+            if (vol > best[p.tag].first) best[p.tag] = {vol, (a + b) * 0.5f};
+        }
+        std::ofstream lf(dir + "/labels_" + name + ".csv");
+        lf << "tag,x,y,vol\n";
+        for (const auto& t : order) {
+            Vec3 q = best[t].second;
+            const float* m = vp.m;
+            float cx = m[0] * q.x + m[4] * q.y + m[8] * q.z + m[12];
+            float cy = m[1] * q.x + m[5] * q.y + m[9] * q.z + m[13];
+            float cw = m[3] * q.x + m[7] * q.y + m[11] * q.z + m[15];
+            lf << "\"" << t << "\"," << (cx / cw * 0.5f + 0.5f) * w << "," << (0.5f - cy / cw * 0.5f) * h << "," << groupVol[t] << "\n";
+        }
+    }
+
+    if (std::getenv("JRS_ONLY_OBJECTS")) return;
 
     // ---- populate the world with visitors ----
     m_visitors.spawnMin = 3.0f;
@@ -805,9 +939,6 @@ void App::runShots(const std::string& dir) {
     frame(false, 6); save("aquarium");
 
     tourShots();
-    hour(10.5f);
-    freeCam(Vec3(10.2f, 1.75f, 9.4f), Vec3(12.2f, 1.25f, 6.9f), 50);
-    frame(false, 3); save("gloss_sculpture");
 
     // machines
     fpsCam(Vec3(3.6f, 0, -1.9f), 180.0f, -12.0f, 60);
@@ -849,6 +980,71 @@ void App::runShots(const std::string& dir) {
         save("tv_ch" + std::to_string(ch));
     }
     m_tv.channel = 1;
+
+    // ---- the player using things (first person, HUD on): look at a part, press E ----
+    {
+        auto aim = [&](const Vec3& feet, const Vec3& target) {
+            m_player.mode = CAM_FIRST;
+            m_player.pos = feet;
+            m_player.fov = 62;
+            Vec3 eye = feet + Vec3(0, m_player.eyeHeight, 0);
+            Vec3 d = normalize(target - eye);
+            m_player.yaw = toDegrees(std::atan2(d.x, d.z));
+            m_player.pitch = toDegrees(std::asin(d.y));
+        };
+        auto use = [&]() { InteractionSystem::get().useHovered(); };
+        hour(11.0f);
+        m_showHelp = true;
+        fpsCam(Vec3(0.0f, 0, 4.3f), 180.0f, -6.0f, 75);
+        frame(true, 3); save("help_screen");
+        m_showHelp = false;
+        if (m_vend[0].m_state == VendingMachine::READY) m_vend[0].npcTakeItem();   // clear the earlier demo purchase
+        m_vend[0].m_credit = 0;
+        m_vend[0].m_entry.clear();
+        frame(true, 45);
+        m_vend[0].m_msgTimer = 0.0f;
+        Messages::get().clear();
+        Mat4 vr = m_vend[0].root();
+        Vec3 vs = m_vend[0].standPos() + Vec3(0.12f, 0, 0.12f);
+        auto vpt = [&](float x, float y) { return vr.transformPoint({x, y, 0.41f}); };
+        aim(vs, vpt(0.33f, 1.12f)); frame(true, 3); save("play_1_look");          // "Insert Tk 50 note"
+        use(); aim(vs, vpt(0.255f, 1.50f)); frame(true, 4); save("play_2_coin");  // credit shown, looking at key A
+        use(); aim(vs, vpt(0.325f, 1.50f)); frame(true, 2); use();                 // A, then 1
+        aim(vs, vpt(0.395f, 1.44f)); frame(true, 4); save("play_3_code");          // "A1 Cola ... PRESS OK"
+        use(); frame(true, 22); save("play_4_spiral");                             // spiral turns
+        aim(vs, vpt(-0.15f, 0.38f));
+        for (int i = 0; i < 120 && m_vend[0].m_state != VendingMachine::READY; ++i) frame(true, 1);
+        frame(true, 3); save("play_5_drop");                                       // "Push flap - take Cola"
+        use(); frame(true, 8); save("play_6_flap");                                // flap swings in, item in the bag
+        // walking (third person) to the entrance: the sliding doors open
+        m_player.mode = CAM_THIRD;
+        m_player.pos = Vec3(0.4f, 0, 10.5f);
+        m_player.yaw = 180.0f;
+        m_player.pitch = -8.0f;
+        m_player.fov = 65;
+        frame(true, 30); save("play_walk_1");
+        m_player.pos = Vec3(0.2f, 0, 7.4f);
+        frame(true, 40); save("play_door");
+        // light switch at night (on, then off)
+        Messages::get().clear();
+        hour(21.0f);
+        aim(Vec3(-1.6f, 0, 3.7f), Vec3(-1.75f, 1.3f, 4.89f));
+        m_player.fov = 70;
+        frame(true, 3); save("play_switch_on");
+        use(); frame(true, 3); save("play_switch_off");
+        use(); frame(true, 2);
+        hour(11.0f);
+        // TV: change the channel
+        Messages::get().clear();
+        aim(Vec3(0.6f, 0, -2.6f), Layout::TV_POS);
+        m_player.fov = 70;
+        frame(true, 3); use(); frame(true, 20); save("play_tv");
+        // aquarium: feed the fish
+        Messages::get().clear();
+        aim(m_aquarium.viewPos(), Layout::AQUARIUM_POS + Vec3(0, 1.0f, 0));
+        m_player.fov = 65;
+        frame(true, 3); use(); frame(true, 60); save("play_fish");
+    }
 
     // story shots: a visitor's car coming along the road, then people walking in
     hour(15.5f);
@@ -992,6 +1188,8 @@ void App::runShots(const std::string& dir) {
         hour(11.0f);
         freeCam(Vec3(5.0f, 70.0f, 70.0f), Vec3(0, 0, 4.0f), 55);
         bench("aerial");
+        hour(21.0f);
+        bench("aerial_night");
     }
     std::cout << "Report screenshots written to " << dir << std::endl;
 }

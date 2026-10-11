@@ -22,6 +22,8 @@ public:
     float eyeHeight = 1.62f;
     float walkSpeed = 2.4f, runSpeed = 5.0f;
     HumanLook look;
+    bool scripted = false;        // position is set from outside (video); only the walk animation runs
+    bool scriptWalking = false;
 
     // free camera
     Vec3 freePos = Vec3(-30.0f, 22.0f, 40.0f);

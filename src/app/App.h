@@ -60,7 +60,7 @@ private:
     void runCinematic(const std::string& mp4Path);
     void renderStudio(int w, int h, const Vec3& camPos, const Vec3& target, float fov, int partLimit, int object, float time,
                       float white = -1.0f);   // >= 0: white background, no floor, camera fitted to the object
-    void renderPartTile(int w, int h, const Vec3& viewDir, int mesh, const Mat4& model, const Material& mat, const std::string& path);
+    Mat4 renderPartList(int w, int h, const Vec3& viewDir, const std::vector<PartCollector::P>& parts, bool wire, float fov);
     int studioPartCount(int object);
     void studioObject(DrawSink& s, int object, float time);
 
@@ -88,6 +88,7 @@ private:
     bool m_showHelp = true;
     bool m_cursorFree = false;
     bool m_hudVisible = true;
+    bool m_hudCompact = false;   // video: small HUD
     double m_lastMouseX = 0, m_lastMouseY = 0;
     bool m_firstMouse = true;
     int m_fps = 0;

@@ -1,0 +1,20 @@
+{\scriptsize\setlength{\tabcolsep}{3pt}
+\begin{longtable}{@{}P{2.6cm} P{1.65cm} r P{2.85cm} P{3.3cm} P{2.05cm} P{1.75cm}@{}}
+\caption{Wall clock: every part with its basic shape and its transformation $M = T\,R\,S$ (object space, metres and degrees; $\pm$ = mirrored pair, $a\ldots b$ = range over the copies)}\\
+\toprule
+Part & Shape & No. & Scale $S=(s_x,s_y,s_z)$ & Translation $T=(t_x,t_y,t_z)$ & Rotation $R=(\theta_x,\theta_y,\theta_z)$ & Colour / texture \\
+\midrule
+\endfirsthead
+\toprule
+Part & Shape & No. & Scale $S=(s_x,s_y,s_z)$ & Translation $T=(t_x,t_y,t_z)$ & Rotation $R=(\theta_x,\theta_y,\theta_z)$ & Colour / texture \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Wooden rim & torus & 1 & (.42, .25, .42) & (0, 0, .02) & (90, 0, 0) & \sw{0.25,0.15,0.08} \txs{06} \\
+Clock face & cylinder & 1 & (.36, .02, .36) & (0, 0, .015) & (90, 0, 0) & \sw{0.96,0.95,0.92} \\
+Hour ticks & cube & 12 & (.01/.018, .025/.04, .006) & (-.14$\ldots$.14, -.14$\ldots$.14, .03) & (0, 0, -150$\ldots$180) & \sw{0.08,0.08,0.08} \\
+Hour hand & cube & 1 & (.018, .11, .005) & (-.042, .027, .036) & (0, 0, 57) & \sw{0.08,0.08,0.08} \\
+Minute hand & cube & 1 & (.012, .15, .005) & (.041, .057, .04) & (0, 0, -36) & \sw{0.08,0.08,0.08} \\
+Centre cap & cylinder & 1 & (.025, .01, .025) & (0, 0, .044) & (90, 0, 0) & \sw{0.70,0.10,0.10} \\
+\end{longtable}}

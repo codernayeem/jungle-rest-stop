@@ -78,8 +78,8 @@ flat in vec4 vEmit;
 flat in vec4 vParams;
 out vec4 FragColor;
 
-#define MAX_POINT 16
-#define MAX_SPOT 8
+#define MAX_POINT 32
+#define MAX_SPOT 16
 
 uniform sampler2DArray uTex;
 uniform sampler2DShadow uShadowMap;
@@ -115,6 +115,8 @@ uniform vec2 uSLCone[MAX_SPOT];     // cos(inner), cos(outer)
 uniform vec3 uFogColor;
 uniform float uFogDensity;
 uniform float uExposure;
+uniform int uWire;          // 1 = draw only the triangle edges in one colour (report figures)
+uniform vec3 uWireColor;
 
 // What a mirror-like surface reflects in direction R (no real reflection is
 // traced; this is a cheap painted surrounding with strong contrast):
@@ -149,6 +151,7 @@ float shadowFactor(vec3 wp, vec3 n, float ndl) {
 }
 
 void main() {
+    if (uWire == 1) { FragColor = vec4(uWireColor, 1.0); return; }
     int flags = int(vParams.w + 0.5);
     int layer = int(vEmit.w + 0.5);
 
@@ -784,6 +787,24 @@ void Renderer::drawChunkList() {
             statTriangles += (long long)b.count * m_meshes[b.mesh].indexCount / 3;
         }
     }
+}
+
+// Draws the edges of every triangle of the dynamic objects on top of the shaded
+// picture (used for the report figures of the basic shapes)
+void Renderer::drawWireOverlay(const Vec3& color) {
+    m_main.use();
+    m_main.set("uWire", 1);
+    m_main.set("uWireColor", color);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glEnable(GL_POLYGON_OFFSET_LINE);
+    glPolygonOffset(-1.0f, -1.0f);
+    glDepthFunc(GL_LEQUAL);
+    drawDynamicOpaque();
+    glDepthFunc(GL_LESS);
+    glDisable(GL_POLYGON_OFFSET_LINE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    m_main.set("uWire", 0);
+    glBindVertexArray(0);
 }
 
 void Renderer::drawDynamicOpaque() {
