@@ -291,8 +291,32 @@ void App::runCinematic(const std::string& outPath) {
     pressAt(vp(0.255f, 1.50f), 0.5f, 0.2f);                                 // A
     pressAt(vp(0.325f, 1.50f), 0.3f, 0.5f);                                 // 1
     pressAt(vp(0.395f, 1.44f), 0.4f, 0.2f);                                 // OK
-    aim(vp(-0.15f, 1.1f), 0.6f);                                             // watch the spiral
-    for (int k = 0; k < 150 && vm.m_state != VendingMachine::READY; ++k) recFrame(true);
+    // watch the A1 spiral turn, then follow the can down into the tray
+    float fov0 = m_player.fov;
+    {
+        Vec3 a1 = vp(-0.36f, 1.47f);
+        Vec3 eye = m_player.pos + Vec3(0, m_player.eyeHeight, 0);
+        Vec3 d = normalize(a1 - eye);
+        float y0 = m_player.yaw, p0 = m_player.pitch;
+        float y1 = y0 + angleDiff(y0, toDegrees(std::atan2(d.x, d.z))), p1 = toDegrees(std::asin(clampf(d.y, -1.0f, 1.0f)));
+        for (int k = 1; k <= 18; ++k) {   // turn to the slot and widen the view a little
+            float t = ease(k / 18.0f);
+            m_player.yaw = y0 + (y1 - y0) * t;
+            m_player.pitch = p0 + (p1 - p0) * t;
+            m_player.fov = fov0 + (72.0f - fov0) * t;
+            recFrame(true);
+        }
+    }
+    for (int k = 0; k < 220 && vm.m_state != VendingMachine::READY; ++k) {
+        if (vm.m_state == VendingMachine::DROPPING) {   // the camera follows the falling can
+            Vec3 eye = m_player.pos + Vec3(0, m_player.eyeHeight, 0);
+            Vec3 d = normalize(vr.transformPoint(vm.m_dropPos) + Vec3(0, -0.15f, 0) - eye);
+            m_player.yaw += angleDiff(m_player.yaw, toDegrees(std::atan2(d.x, d.z))) * 0.25f;
+            m_player.pitch += (toDegrees(std::asin(clampf(d.y, -1.0f, 1.0f))) - m_player.pitch) * 0.25f;
+        }
+        recFrame(true);
+    }
+    wait(0.5f);   // the wider view stays until the next scene
     pressAt(vp(-0.15f, 0.38f), 0.7f, 0.9f);                                 // push the flap: the item goes to the bag
     pressAt(vr.transformPoint({0.33f, 0.86f, 0.41f}), 0.5f, 0.9f);          // take the change
 
