@@ -1,9 +1,5 @@
 # Jungle Rest Stop — OpenGL 3.3 Computer Graphics Project
 
-**Student:** Md. Nayeem  **Roll:** 2107050  **Course:** Computer Graphics / Image Processing Lab
-**Tech:** C++17, OpenGL 3.3 Core, GLFW, GLAD. No model files and no image files are loaded.
-Every object is made from basic shapes, and every texture is generated in code.
-
 A rest stop deep in a jungle. Visitors arrive **only by car**. They park, walk inside and use
 the three connected rooms, then drive away. You walk around as a person and can use every machine.
 
@@ -79,9 +75,14 @@ src/
   actors/   Human (articulated person), Car, Visitors (NPC AI)
   game/     Player (cameras), Interaction (ray picking), Collision, DayNight, Hud, Inventory
   app/      App (main loop, input, frame cap), Showcase (report screenshots)
+presentation/ presentation slides (.pptx) & demo video (.mp4)
 report/     LaTeX report (report.tex) + figures
 legacy/     the original single-file project (kept for comparison)
 ```
+
+## Presentation & Demo
+* **Video Demonstration:** [`presentation/jungle_rest_stop_demo.mp4`](presentation/jungle_rest_stop_demo.mp4) — full walkthrough of interactive machines, NPC visitors, day/night cycle, and graphics features.
+* **Presentation Slides:** [`presentation/Jungle_Rest_Stop_Presentation.pptx`](presentation/Jungle_Rest_Stop_Presentation.pptx) — project defense and demonstration slide deck.
 
 ## Report
 The full LaTeX report is in [`report/report.tex`](report/report.tex), and the compiled version is `report/report.pdf`.
